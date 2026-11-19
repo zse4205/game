@@ -2,62 +2,78 @@
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>AI 女王藍牙調教系統 (YSKJ BLE)</title>
 <style>
   :root { --bg: #121216; --panel: #1e1e26; --accent: #e11d48; --text: #f3f4f6; --muted: #9ca3af; }
-  body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 16px; display: flex; flex-direction: column; height: 100vh; box-sizing: border-box; }
-  .header { display: flex; justify-content: space-between; align-items: center; background: var(--panel); padding: 12px 16px; border-radius: 10px; margin-bottom: 12px; }
-  button { background: var(--accent); color: white; border: none; padding: 10px 16px; border-radius: 8px; font-weight: bold; cursor: pointer; transition: 0.2s; }
-  button:hover { opacity: 0.9; }
+  body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 12px; display: flex; flex-direction: column; height: 100dvh; box-sizing: border-box; overflow: hidden; }
+  .header { display: flex; justify-content: space-between; align-items: center; background: var(--panel); padding: 10px 14px; border-radius: 10px; margin-bottom: 8px; flex-shrink: 0; }
+  button { background: var(--accent); color: white; border: none; padding: 8px 12px; border-radius: 8px; font-weight: bold; cursor: pointer; }
   button.secondary { background: #374151; }
-  button.stop-btn { background: #dc2626; font-size: 1.1em; width: 100%; padding: 14px; margin-top: 8px; }
-  .status-bar { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; background: var(--panel); padding: 12px; border-radius: 10px; margin-bottom: 12px; text-align: center; }
-  .stat-val { font-size: 1.4em; font-weight: bold; color: var(--accent); }
-  .chat-box { flex: 1; background: var(--panel); border-radius: 10px; padding: 16px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; margin-bottom: 12px; }
-  .msg { max-width: 80%; padding: 10px 14px; border-radius: 12px; line-height: 1.5; }
+  button.stop-btn { background: #dc2626; font-size: 1.05em; width: 100%; padding: 12px; margin-top: 8px; flex-shrink: 0; }
+  .status-bar { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; background: var(--panel); padding: 8px; border-radius: 10px; margin-bottom: 8px; text-align: center; flex-shrink: 0; }
+  .stat-val { font-size: 1.25em; font-weight: bold; color: var(--accent); }
+  
+  /* 聊天視窗鎖定彈性高度與獨立捲動，不被擠壓 */
+  .chat-box { flex: 1; min-height: 0; background: var(--panel); border-radius: 10px; padding: 14px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; margin-bottom: 8px; scroll-behavior: smooth; }
+  .msg { max-width: 85%; padding: 10px 14px; border-radius: 12px; line-height: 1.5; word-break: break-word; }
   .msg.ai { background: #2d1b24; border-left: 4px solid var(--accent); align-self: flex-start; }
   .msg.user { background: #272732; align-self: flex-end; }
   .msg.sys { background: transparent; color: var(--muted); font-size: 0.85em; align-self: center; text-align: center; }
-  .quick-actions { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 8px; }
-  .input-area { display: flex; gap: 8px; }
-  input, select { background: #272732; border: 1px solid #3f3f4e; color: white; padding: 10px; border-radius: 8px; flex: 1; }
-  .settings { font-size: 0.85em; color: var(--muted); margin-bottom: 8px; display: flex; gap: 8px; flex-wrap: wrap; }
+  
+  .quick-actions { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 8px; flex-shrink: 0; }
+  .quick-actions button { padding: 8px 4px; font-size: 0.85em; }
+  .input-area { display: flex; gap: 8px; flex-shrink: 0; }
+  input { background: #272732; border: 1px solid #3f3f4e; color: white; padding: 10px; border-radius: 8px; flex: 1; min-width: 0; }
+  .panel-box { font-size: 0.85em; color: var(--muted); margin-bottom: 8px; display: none; flex-direction: column; gap: 8px; background: var(--panel); padding: 12px; border-radius: 8px; flex-shrink: 0; }
+  .slider-row { display: flex; align-items: center; gap: 10px; color: var(--text); }
 </style>
 </head>
 <body>
 
 <div class="header">
   <div>
-    <strong>👑 AI 調教控制終端</strong>
-    <span id="ble-status" style="margin-left:10px; font-size:0.85em; color:#f87171;">● 未連線</span>
+    <strong>👑 AI 調教終端</strong>
+    <div id="ble-status" style="font-size:0.8em; color:#f87171;">● 未連線</div>
   </div>
-  <div>
-    <button id="btn-connect" onclick="connectBLE()">🔗 連接榨精杯</button>
-    <button class="secondary" onclick="toggleSettings()">⚙️ API 設定</button>
+  <div style="display:flex; gap:6px;">
+    <button onclick="connectBLE()">🔗 連線</button>
+    <button class="secondary" onclick="togglePanel('manual-panel')">🎛️ 手動</button>
+    <button class="secondary" onclick="togglePanel('settings-panel')">⚙️ 設定</button>
   </div>
 </div>
 
-<div id="settings-panel" class="settings" style="display:none; background:var(--panel); padding:10px; border-radius:8px;">
-  <input id="api-url" value="http://localhost:11434/v1/chat/completions" placeholder="API Endpoint (Ollama / OpenRouter)">
-  <input id="api-key" type="password" placeholder="API Key (本地 Ollama 可留空)">
-  <input id="api-model" value="llama3" placeholder="模型名稱 (如 llama3 / qwen2.5)">
+<!-- API 設定面板 -->
+<div id="settings-panel" class="panel-box">
+  <div>API Endpoint：</div>
+  <input id="api-url" value="https://openrouter.ai/api/v1/chat/completions" onchange="saveSettings()">
+  <div>API Key：</div>
+  <input id="api-key" type="password" placeholder="貼上 sk-or-v1-..." onchange="saveSettings()">
+  <div>模型名稱：</div>
+  <input id="api-model" value="openrouter/free" onchange="saveSettings()">
+</div>
+
+<!-- 手動測試面板 -->
+<div id="manual-panel" class="panel-box">
+  <div class="slider-row"><span>馬達 A：</span><input type="range" min="0" max="20" value="0" oninput="manualTest(this.value, 'a')"><span id="val-a">0</span></div>
+  <div class="slider-row"><span>馬達 B：</span><input type="range" min="0" max="20" value="0" oninput="manualTest(this.value, 'b')"><span id="val-b">0</span></div>
+  <div class="slider-row"><span>馬達 C：</span><input type="range" min="0" max="20" value="0" oninput="manualTest(this.value, 'c')"><span id="val-c">0</span></div>
 </div>
 
 <div class="status-bar">
-  <div><div style="font-size:0.8em;color:var(--muted)">當前模式</div><div id="ui-mode" class="stat-val">待機</div></div>
-  <div><div style="font-size:0.8em;color:var(--muted)">馬達 A 強度 (0-20)</div><div id="ui-motor-a" class="stat-val">0</div></div>
-  <div><div style="font-size:0.8em;color:var(--muted)">馬達 B/C 強度</div><div id="ui-motor-bc" class="stat-val">0 / 0</div></div>
+  <div><div style="font-size:0.75em;color:var(--muted)">當前模式</div><div id="ui-mode" class="stat-val">待機</div></div>
+  <div><div style="font-size:0.75em;color:var(--muted)">馬達 A (0-20)</div><div id="ui-motor-a" class="stat-val">0</div></div>
+  <div><div style="font-size:0.75em;color:var(--muted)">馬達 B / C</div><div id="ui-motor-bc" class="stat-val">0 / 0</div></div>
 </div>
 
 <div class="chat-box" id="chat-box">
-  <div class="msg sys">請先點擊右上角「連接榨精杯」，確保沒有其他 App 佔用藍牙。</div>
+  <div class="msg sys">已就緒！電量資訊將固定顯示於上方狀態列，不會再洗版對話紀錄。</div>
 </div>
 
 <div class="quick-actions">
-  <button class="secondary" onclick="quickEvent('快忍不住了！求求女王停下來！', true)">🥵 快射了 (緊急寸止)</button>
-  <button class="secondary" onclick="quickEvent('主人，我已經忍耐很久了，請求允許高潮...', false)">🙏 請求允許高潮</button>
-  <button class="secondary" onclick="quickEvent('請再給我更強一點的刺激...', false)">🔥 請求加強刺激</button>
+  <button class="secondary" onclick="quickEvent('快忍不住了！求求女王停下來！', true)">🥵 快射了</button>
+  <button class="secondary" onclick="quickEvent('主人，我已經忍耐很久了，請求允許高潮...', false)">🙏 請求高潮</button>
+  <button class="secondary" onclick="quickEvent('請再給我更強一點的刺激...', false)">🔥 加強刺激</button>
 </div>
 
 <div class="input-area">
@@ -67,53 +83,63 @@
 <button class="stop-btn" onclick="emergencyStop()">🛑 緊急安全停止 (全部歸零)</button>
 
 <script>
-// ================= 1. YSKJ BLE 藍牙控制核心 =================
+// 載入儲存的設定
+window.onload = () => {
+  if (localStorage.getItem('q_url')) document.getElementById('api-url').value = localStorage.getItem('q_url');
+  if (localStorage.getItem('q_key')) document.getElementById('api-key').value = localStorage.getItem('q_key');
+  if (localStorage.getItem('q_model')) document.getElementById('api-model').value = localStorage.getItem('q_model');
+};
+function saveSettings() {
+  localStorage.setItem('q_url', document.getElementById('api-url').value.trim());
+  localStorage.setItem('q_key', document.getElementById('api-key').value.trim());
+  localStorage.setItem('q_model', document.getElementById('api-model').value.trim());
+}
+
+// ================= YSKJ BLE 藍牙控制 =================
 const SERVICE_UUID = 0xff40;
 const WRITE_CHAR_UUID = 0xff41;
 const NOTIFY_CHAR_UUID = 0xff42;
 
-let bleDevice = null;
-let writeChar = null;
-let waveInterval = null;
+let bleDevice = null, writeChar = null, waveInterval = null;
 let currentMotor = { a: 0, b: 0, c: 0 };
+let deviceName = "設備";
 
 async function connectBLE() {
   try {
-    logSys("正在搜尋 YSKJ 藍牙設備...");
-    bleDevice = await navigator.bluetooth.requestDevice({
-      filters: [{ services: [SERVICE_UUID] }]
-    });
+    bleDevice = await navigator.bluetooth.requestDevice({ filters: [{ services: [SERVICE_UUID] }] });
+    deviceName = bleDevice.name || "設備";
+    
     bleDevice.addEventListener('gattserverdisconnected', () => {
       document.getElementById('ble-status').innerText = "● 已斷線";
       document.getElementById('ble-status').style.color = "#f87171";
       clearInterval(waveInterval);
+      logSys("⚠️ 藍牙連線已中斷");
     });
 
     const server = await bleDevice.gatt.connect();
     const service = await server.getPrimaryService(SERVICE_UUID);
     writeChar = await service.getCharacteristic(WRITE_CHAR_UUID);
 
-    // 嘗試監聽電量與狀態回報
+    // 靜默接收電量回報，直接更新頂部狀態列，不寫入聊天框
     try {
       const notifyChar = await service.getCharacteristic(NOTIFY_CHAR_UUID);
       await notifyChar.startNotifications();
       notifyChar.addEventListener('characteristicvaluechanged', (e) => {
         const data = new Uint8Array(e.target.value.buffer);
         if (data[0] === 0x35 && data[1] === 0x13 && data[2] === 0x01) {
-          logSys(`設備電量回報：${data[3]}%`);
+          document.getElementById('ble-status').innerText = `● 已連線 (${deviceName}) | 🔋 ${data[3]}%`;
         }
       });
-    } catch (err) { console.log("Notify 略過:", err); }
+    } catch (err) {}
 
-    document.getElementById('ble-status').innerText = `● 已連線 (${bleDevice.name || '設備'})`;
+    document.getElementById('ble-status').innerText = `● 已連線 (${deviceName})`;
     document.getElementById('ble-status').style.color = "#4ade80";
-    logSys("藍牙連線成功！隨時可以開始調教。");
+    logSys(`✅ 已成功連接 ${deviceName}`);
   } catch (error) {
     logSys("連線失敗：" + error.message);
   }
 }
 
-// 發送 0x35 0x12 速率控制指令 (a, b, c 範圍 0~20)
 async function sendMotorSpeed(a, b, c) {
   a = Math.max(0, Math.min(20, Math.round(a)));
   b = Math.max(0, Math.min(20, Math.round(b)));
@@ -126,14 +152,17 @@ async function sendMotorSpeed(a, b, c) {
   if (!writeChar) return;
   const checksum = (0x35 + 0x12 + a + b + c) & 0xFF;
   const packet = new Uint8Array([0x35, 0x12, a, b, c, checksum]);
-  try {
-    await writeChar.writeValueWithoutResponse(packet);
-  } catch (e) {
-    console.error("發送指令失敗:", e);
-  }
+  try { await writeChar.writeValueWithoutResponse(packet); } catch (e) {}
 }
 
-// 動態波形引擎
+function manualTest(val, motor) {
+  clearInterval(waveInterval);
+  document.getElementById('ui-mode').innerText = "手動測試";
+  document.getElementById(`val-${motor}`).innerText = val;
+  currentMotor[motor] = Number(val);
+  sendMotorSpeed(currentMotor.a, currentMotor.b, currentMotor.c);
+}
+
 function setDeviceMode(mode, baseLevel) {
   clearInterval(waveInterval);
   document.getElementById('ui-mode').innerText = mode;
@@ -149,15 +178,12 @@ function setDeviceMode(mode, baseLevel) {
     if (mode === 'steady') {
       sendMotorSpeed(baseLevel, baseLevel, baseLevel);
     } else if (mode === 'tease') {
-      // 挑逗波浪：在低檔與目標檔位之間緩慢起伏，偶爾突襲
       const val = Math.round((Math.sin(tick * 0.4) + 1) / 2 * baseLevel);
       sendMotorSpeed(val, Math.max(0, val - 2), val);
     } else if (mode === 'edge_pulse') {
-      // 寸止脈衝：動 1.5 秒、停 2 秒折磨
       const active = (tick % 7) < 3;
       sendMotorSpeed(active ? baseLevel : 0, active ? baseLevel : 0, 0);
     } else if (mode === 'climax') {
-      // 允許高潮：滿載衝刺
       sendMotorSpeed(20, 20, 20);
     }
   }, 500);
@@ -167,16 +193,16 @@ function emergencyStop() {
   clearInterval(waveInterval);
   sendMotorSpeed(0, 0, 0);
   document.getElementById('ui-mode').innerText = "緊急停止";
-  logSys("已執行緊急停止，所有馬達歸零。");
+  logSys("🛑 已執行緊急停止，所有馬達歸零。");
 }
 
-// ================= 2. AI 女王大腦與控射邏輯 =================
+// ================= AI 女王大腦 =================
 const SYSTEM_PROMPT = `你現在扮演一位冷酷、高傲、喜歡掌控男性生理反應的「調教女王」。
 你手中握有使用者穿戴的電動榨精杯遠端控制器（馬達強度範圍 0 到 20，0為完全停止，20為極限高潮衝刺）。
 你的目標是透過言語支配與控制設備頻率，進行「寸止調教（Edging）」，絕對不能讓他輕易射出來，除非你認為他已經忍耐到極限並決定賞賜他。
 
 【重要輸出格式規定】
-你每次回覆「必須」只輸出合法的 JSON 格式，不可包含任何 Markdown 標記（如 \`\`\`json）或多餘文字，格式如下：
+你每次回覆「必須」只輸出合法的 JSON 格式，不可包含任何 Markdown 標記或多餘文字，格式如下：
 {
   "dialogue": "你對他說的調教台詞（繁體中文，語氣充滿支配感、挑逗或嘲諷）",
   "mode": "動作模式，只能從以下五個選一個：stop / steady / tease / edge_pulse / climax",
@@ -194,45 +220,48 @@ async function sendMessage(overrideText = null) {
   appendMsg('user', text);
   chatHistory.push({ role: "user", content: `[當前設備強度:${currentMotor.a}/20] ${text}` });
 
-  const url = document.getElementById('api-url').value;
-  const key = document.getElementById('api-key').value;
-  const model = document.getElementById('api-model').value;
+  const url = document.getElementById('api-url').value.trim();
+  const key = document.getElementById('api-key').value.trim();
+  const model = document.getElementById('api-model').value.trim();
 
   try {
-    const headers = { 'Content-Type': 'application/json' };
+    const headers = {
+      'Content-Type': 'application/json',
+      'HTTP-Referer': window.location.href,
+      'X-Title': 'YSKJ Controller'
+    };
     if (key) headers['Authorization'] = `Bearer ${key}`;
 
     const res = await fetch(url, {
       method: 'POST',
       headers,
-      body: JSON.stringify({
-        model: model,
-        messages: chatHistory,
-        temperature: 0.8
-      })
+      body: JSON.stringify({ model, messages: chatHistory, temperature: 0.8 })
     });
 
     const data = await res.json();
-    let replyRaw = data.choices[0].message.content.trim();
-    // 清理可能出現的 markdown code block
-    replyRaw = replyRaw.replace(/^```json/i, '').replace(/```$/, '').trim();
     
-    const parsed = JSON.parse(replyRaw);
-    chatHistory.push({ role: "assistant", content: replyRaw });
+    if (!res.ok || data.error) {
+      const errMsg = data.error?.message || JSON.stringify(data);
+      throw new Error(`API 拒絕 (${res.status}): ${errMsg}`);
+    }
+
+    let replyRaw = data.choices[0].message.content.trim();
+    const jsonMatch = replyRaw.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error("AI 未輸出 JSON 格式，原始回覆：" + replyRaw);
+    
+    const parsed = JSON.parse(jsonMatch[0]);
+    chatHistory.push({ role: "assistant", content: jsonMatch[0] });
 
     appendMsg('ai', `${parsed.dialogue}\n<small style="color:#f43f5e">[指令: ${parsed.mode} | 強度: ${parsed.intensity}/20]</small>`);
     setDeviceMode(parsed.mode, parsed.intensity);
 
   } catch (err) {
-    logSys("AI 回應解析錯誤（請確認 Ollama/API 是否啟動，或模型是否輸出純 JSON）：" + err.message);
+    logSys("⚠️ " + err.message);
   }
 }
 
 function quickEvent(promptText, forceStopFirst) {
-  if (forceStopFirst) {
-    // 毫秒級先幫使用者煞車，再讓 AI 接手嘲諷
-    setDeviceMode('stop', 0);
-  }
+  if (forceStopFirst) setDeviceMode('stop', 0);
   sendMessage(promptText);
 }
 
@@ -246,10 +275,13 @@ function appendMsg(role, html) {
 }
 
 function logSys(text) { appendMsg('sys', text); }
-function toggleSettings() {
-  const p = document.getElementById('settings-panel');
-  p.style.display = p.style.display === 'none' ? 'flex' : 'none';
+function togglePanel(id) {
+  const p = document.getElementById(id);
+  p.style.display = p.style.display === 'none' || p.style.display === '' ? 'flex' : 'none';
 }
+</script>
+</body>
+</html>
 </script>
 </body>
 </html>
