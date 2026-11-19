@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI 女王藍牙調教系統 (YSKJ BLE)</title>
+<style>
+  :root { --bg: #121216; --panel: #1e1e26; --accent: #e11d48; --text: #f3f4f6; --muted: #9ca3af; }
+  body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 16px; display: flex; flex-direction: column; height: 100vh; box-sizing: border-box; }
+  .header { display: flex; justify-content: space-between; align-items: center; background: var(--panel); padding: 12px 16px; border-radius: 10px; margin-bottom: 12px; }
+  button { background: var(--accent); color: white; border: none; padding: 10px 16px; border-radius: 8px; font-weight: bold; cursor: pointer; transition: 0.2s; }
+  button:hover { opacity: 0.9; }
+  button.secondary { background: #374151; }
+  button.stop-btn { background: #dc2626; font-size: 1.1em; width: 100%; padding: 14px; margin-top: 8px; }
+  .status-bar { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; background: var(--panel); padding: 12px; border-radius: 10px; margin-bottom: 12px; text-align: center; }
+  .stat-val { font-size: 1.4em; font-weight: bold; color: var(--accent); }
+  .chat-box { flex: 1; background: var(--panel); border-radius: 10px; padding: 16px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; margin-bottom: 12px; }
+  .msg { max-width: 80%; padding: 10px 14px; border-radius: 12px; line-height: 1.5; }
+  .msg.ai { background: #2d1b24; border-left: 4px solid var(--accent); align-self: flex-start; }
+  .msg.user { background: #272732; align-self: flex-end; }
+  .msg.sys { background: transparent; color: var(--muted); font-size: 0.85em; align-self: center; text-align: center; }
+  .quick-actions { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 8px; }
+  .input-area { display: flex; gap: 8px; }
+  input, select { background: #272732; border: 1px solid #3f3f4e; color: white; padding: 10px; border-radius: 8px; flex: 1; }
+  .settings { font-size: 0.85em; color: var(--muted); margin-bottom: 8px; display: flex; gap: 8px; flex-wrap: wrap; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <strong>👑 AI 調教控制終端</strong>
+    <span id="ble-status" style="margin-left:10px; font-size:0.85em; color:#f87171;">● 未連線</span>
+  </div>
+  <div>
+    <button id="btn-connect" onclick="connectBLE()">🔗 連接榨精杯</button>
+    <button class="secondary" onclick="toggleSettings()">⚙️ API 設定</button>
+  </div>
+</div>
+
+<div id="settings-panel" class="settings" style="display:none; background:var(--panel); padding:10px; border-radius:8px;">
+  <input id="api-url" value="http://localhost:11434/v1/chat/completions" placeholder="API Endpoint (Ollama / OpenRouter)">
+  <input id="api-key" type="password" placeholder="API Key (本地 Ollama 可留空)">
+  <input id="api-model" value="llama3" placeholder="模型名稱 (如 llama3 / qwen2.5)">
+</div>
+
+<div class="status-bar">
+  <div><div style="font-size:0.8em;color:var(--muted)">當前模式</div><div id="ui-mode" class="stat-val">待機</div></div>
+  <div><div style="font-size:0.8em;color:var(--muted)">馬達 A 強度 (0-20)</div><div id="ui-motor-a" class="stat-val">0</div></div>
+  <div><div style="font-size:0.8em;color:var(--muted)">馬達 B/C 強度</div><div id="ui-motor-bc" class="stat-val">0 / 0</div></div>
+</div>
+
+<div class="chat-box" id="chat-box">
+  <div class="msg sys">請先點擊右上角「連接榨精杯」，確保沒有其他 App 佔用藍牙。</div>
+</div>
+
+<div class="quick-actions">
+  <button class="secondary" onclick="quickEvent('快忍不住了！求求女王停下來！', true)">🥵 快射了 (緊急寸止)</button>
+  <button class="secondary" onclick="quickEvent('主人，我已經忍耐很久了，請求允許高潮...', false)">🙏 請求允許高潮</button>
+  <button class="secondary" onclick="quickEvent('請再給我更強一點的刺激...', false)">🔥 請求加強刺激</button>
+</div>
+
+<div class="input-area">
+  <input id="user-input" placeholder="輸入你想對女王說的話..." onkeypress="if(event.key==='Enter') sendMessage()">
+  <button onclick="sendMessage()">發送</button>
+</div>
+<button class="stop-btn" onclick="emergencyStop()">🛑 緊急安全停止 (全部歸零)</button>
+
+<script>
+// ================= 1. YSKJ BLE 藍牙控制核心 =================
+const SERVICE_UUID = 0xff40;
+const WRITE_CHAR_UUID = 0xff41;
+const NOTIFY_CHAR_UUID = 0xff42;
+
+let bleDevice = null;
+let writeChar = null;
+let waveInterval = null;
+let currentMotor = { a: 0, b: 0, c: 0 };
+
+async function connectBLE() {
+  try {
+    logSys("正在搜尋 YSKJ 藍牙設備...");
+    bleDevice = await navigator.bluetooth.requestDevice({
+      filters: [{ services: [SERVICE_UUID] }]
+    });
+    bleDevice.addEventListener('gattserverdisconnected', () => {
+      document.getElementById('ble-status').innerText = "● 已斷線";
+      document.getElementById('ble-status').style.color = "#f87171";
+      clearInterval(waveInterval);
+    });
+
+    const server = await bleDevice.gatt.connect();
+    const service = await server.getPrimaryService(SERVICE_UUID);
+    writeChar = await service.getCharacteristic(WRITE_CHAR_UUID);
+
+    // 嘗試監聽電量與狀態回報
+    try {
+      const notifyChar = await service.getCharacteristic(NOTIFY_CHAR_UUID);
+      await notifyChar.startNotifications();
+      notifyChar.addEventListener('characteristicvaluechanged', (e) => {
+        const data = new Uint8Array(e.target.value.buffer);
+        if (data[0] === 0x35 && data[1] === 0x13 && data[2] === 0x01) {
+          logSys(`設備電量回報：${data[3]}%`);
+        }
+      });
+    } catch (err) { console.log("Notify 略過:", err); }
+
+    document.getElementById('ble-status').innerText = `● 已連線 (${bleDevice.name || '設備'})`;
+    document.getElementById('ble-status').style.color = "#4ade80";
+    logSys("藍牙連線成功！隨時可以開始調教。");
+  } catch (error) {
+    logSys("連線失敗：" + error.message);
+  }
+}
+
+// 發送 0x35 0x12 速率控制指令 (a, b, c 範圍 0~20)
+async function sendMotorSpeed(a, b, c) {
+  a = Math.max(0, Math.min(20, Math.round(a)));
+  b = Math.max(0, Math.min(20, Math.round(b)));
+  c = Math.max(0, Math.min(20, Math.round(c)));
+  currentMotor = { a, b, c };
+
+  document.getElementById('ui-motor-a').innerText = a;
+  document.getElementById('ui-motor-bc').innerText = `${b} / ${c}`;
+
+  if (!writeChar) return;
+  const checksum = (0x35 + 0x12 + a + b + c) & 0xFF;
+  const packet = new Uint8Array([0x35, 0x12, a, b, c, checksum]);
+  try {
+    await writeChar.writeValueWithoutResponse(packet);
+  } catch (e) {
+    console.error("發送指令失敗:", e);
+  }
+}
+
+// 動態波形引擎
+function setDeviceMode(mode, baseLevel) {
+  clearInterval(waveInterval);
+  document.getElementById('ui-mode').innerText = mode;
+  let tick = 0;
+
+  if (mode === 'stop' || baseLevel === 0) {
+    sendMotorSpeed(0, 0, 0);
+    return;
+  }
+
+  waveInterval = setInterval(() => {
+    tick++;
+    if (mode === 'steady') {
+      sendMotorSpeed(baseLevel, baseLevel, baseLevel);
+    } else if (mode === 'tease') {
+      // 挑逗波浪：在低檔與目標檔位之間緩慢起伏，偶爾突襲
+      const val = Math.round((Math.sin(tick * 0.4) + 1) / 2 * baseLevel);
+      sendMotorSpeed(val, Math.max(0, val - 2), val);
+    } else if (mode === 'edge_pulse') {
+      // 寸止脈衝：動 1.5 秒、停 2 秒折磨
+      const active = (tick % 7) < 3;
+      sendMotorSpeed(active ? baseLevel : 0, active ? baseLevel : 0, 0);
+    } else if (mode === 'climax') {
+      // 允許高潮：滿載衝刺
+      sendMotorSpeed(20, 20, 20);
+    }
+  }, 500);
+}
+
+function emergencyStop() {
+  clearInterval(waveInterval);
+  sendMotorSpeed(0, 0, 0);
+  document.getElementById('ui-mode').innerText = "緊急停止";
+  logSys("已執行緊急停止，所有馬達歸零。");
+}
+
+// ================= 2. AI 女王大腦與控射邏輯 =================
+const SYSTEM_PROMPT = `你現在扮演一位冷酷、高傲、喜歡掌控男性生理反應的「調教女王」。
+你手中握有使用者穿戴的電動榨精杯遠端控制器（馬達強度範圍 0 到 20，0為完全停止，20為極限高潮衝刺）。
+你的目標是透過言語支配與控制設備頻率，進行「寸止調教（Edging）」，絕對不能讓他輕易射出來，除非你認為他已經忍耐到極限並決定賞賜他。
+
+【重要輸出格式規定】
+你每次回覆「必須」只輸出合法的 JSON 格式，不可包含任何 Markdown 標記（如 \`\`\`json）或多餘文字，格式如下：
+{
+  "dialogue": "你對他說的調教台詞（繁體中文，語氣充滿支配感、挑逗或嘲諷）",
+  "mode": "動作模式，只能從以下五個選一個：stop / steady / tease / edge_pulse / climax",
+  "intensity": 0到20之間的整數（代表馬達基準強度）
+}`;
+
+let chatHistory = [{ role: "system", content: SYSTEM_PROMPT }];
+
+async function sendMessage(overrideText = null) {
+  const inputEl = document.getElementById('user-input');
+  const text = overrideText || inputEl.value.trim();
+  if (!text) return;
+  if (!overrideText) inputEl.value = '';
+
+  appendMsg('user', text);
+  chatHistory.push({ role: "user", content: `[當前設備強度:${currentMotor.a}/20] ${text}` });
+
+  const url = document.getElementById('api-url').value;
+  const key = document.getElementById('api-key').value;
+  const model = document.getElementById('api-model').value;
+
+  try {
+    const headers = { 'Content-Type': 'application/json' };
+    if (key) headers['Authorization'] = `Bearer ${key}`;
+
+    const res = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        model: model,
+        messages: chatHistory,
+        temperature: 0.8
+      })
+    });
+
+    const data = await res.json();
+    let replyRaw = data.choices[0].message.content.trim();
+    // 清理可能出現的 markdown code block
+    replyRaw = replyRaw.replace(/^```json/i, '').replace(/```$/, '').trim();
+    
+    const parsed = JSON.parse(replyRaw);
+    chatHistory.push({ role: "assistant", content: replyRaw });
+
+    appendMsg('ai', `${parsed.dialogue}\n<small style="color:#f43f5e">[指令: ${parsed.mode} | 強度: ${parsed.intensity}/20]</small>`);
+    setDeviceMode(parsed.mode, parsed.intensity);
+
+  } catch (err) {
+    logSys("AI 回應解析錯誤（請確認 Ollama/API 是否啟動，或模型是否輸出純 JSON）：" + err.message);
+  }
+}
+
+function quickEvent(promptText, forceStopFirst) {
+  if (forceStopFirst) {
+    // 毫秒級先幫使用者煞車，再讓 AI 接手嘲諷
+    setDeviceMode('stop', 0);
+  }
+  sendMessage(promptText);
+}
+
+function appendMsg(role, html) {
+  const box = document.getElementById('chat-box');
+  const div = document.createElement('div');
+  div.className = `msg ${role}`;
+  div.innerHTML = html.replace(/\n/g, '<br>');
+  box.appendChild(div);
+  box.scrollTop = box.scrollHeight;
+}
+
+function logSys(text) { appendMsg('sys', text); }
+function toggleSettings() {
+  const p = document.getElementById('settings-panel');
+  p.style.display = p.style.display === 'none' ? 'flex' : 'none';
+}
+</script>
+</body>
+</html>
