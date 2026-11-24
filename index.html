@@ -1,1454 +1,1546 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>👑 AI 調教終端 (雙模式整合版)</title>
-  <!-- 載入 MediaPipe Pose CDN 以進行瀏覽器端即時人體骨架偵測 -->
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
-  <style>
-    :root {
-      --bg: #0f0f13;
-      --card: #1a1a22;
-      --accent: #e11d48;
-      --accent-glow: rgba(225, 29, 72, 0.45);
-      --text: #f3f4f6;
-      --muted: #9ca3af;
-      --green: #10b981;
-      --amber: #f59e0b;
-    }
-    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-    body { background: var(--bg); color: var(--text); height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>AI 女王藍牙調教系統 (YSKJ BLE)</title>
+<!-- MediaPipe Pose 本地端瀏覽器即時骨架偵測 -->
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+<style>
+  :root {
+    --bg: #121216;
+    --panel: #1e1e26;
+    --accent: #e11d48;
+    --text: #f3f4f6;
+    --muted: #9ca3af;
+    --green: #22c55e;
+    --orange: #f97316;
+  }
+  * {
+    box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
+  }
+  body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    margin: 0;
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+    height: 100dvh;
+    overflow: hidden;
+  }
 
-    /* 頂部狀態列 */
-    header { background: var(--card); padding: 10px 12px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #2a2a35; z-index: 20; flex-shrink: 0; }
-    .title-area h1 { font-size: 15px; font-weight: 700; display: flex; align-items: center; gap: 6px; }
-    .status-text { font-size: 11px; color: var(--muted); margin-top: 2px; }
-    .header-btns { display: flex; gap: 5px; }
-    button { border: none; border-radius: 8px; padding: 7px 9px; font-size: 12px; font-weight: 600; cursor: pointer; color: #fff; background: #2d2d3a; transition: 0.15s; }
-    button:active { transform: scale(0.96); }
-    .btn-primary { background: var(--accent); }
+  /* 頂部標題與控制列 */
+  .header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: var(--panel);
+    padding: 8px 12px;
+    border-radius: 10px;
+    margin-bottom: 6px;
+    flex-shrink: 0;
+  }
+  button {
+    background: var(--accent);
+    color: white;
+    border: none;
+    padding: 7px 12px;
+    border-radius: 8px;
+    font-weight: bold;
+    font-size: 13px;
+    cursor: pointer;
+    transition: opacity 0.15s, transform 0.1s;
+  }
+  button:active { transform: scale(0.97); }
+  button.secondary { background: #374151; }
+  button.btn-edge { background: var(--orange); color: #fff; }
+  button.stop-btn {
+    background: #dc2626;
+    font-size: 14px;
+    width: 100%;
+    padding: 10px;
+    margin-top: 6px;
+    flex-shrink: 0;
+  }
 
-    /* 模式切換分頁列 */
-    .mode-tabs { display: grid; grid-template-columns: 1fr 1fr; background: #14141b; border-bottom: 1px solid #2a2a35; flex-shrink: 0; z-index: 19; }
-    .tab-btn { background: transparent; border-radius: 0; padding: 10px; font-size: 13px; color: var(--muted); border-bottom: 2px solid transparent; }
-    .tab-btn.active { color: #fff; font-weight: 800; border-bottom: 2px solid var(--accent); background: rgba(225, 29, 72, 0.08); }
+  /* 主分頁切換（對話調教 vs 鏡頭互動） */
+  .mode-tabs {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    margin-bottom: 6px;
+    flex-shrink: 0;
+  }
+  .mode-tabs button {
+    background: #272732;
+    color: var(--muted);
+    padding: 8px;
+    border: 1px solid #3f3f4e;
+  }
+  .mode-tabs button.active {
+    background: var(--accent);
+    color: white;
+    border-color: var(--accent);
+  }
 
-    /* 折疊設定與手動面板 */
-    .drawer { background: #16161d; padding: 12px 14px; border-bottom: 1px solid #2a2a35; display: none; flex-direction: column; gap: 8px; font-size: 13px; z-index: 18; flex-shrink: 0; }
-    .drawer.open { display: flex; }
-    .drawer input[type="text"], .drawer input[type="password"] { width: 100%; background: #0f0f13; border: 1px solid #333; color: #fff; padding: 8px; border-radius: 6px; font-size: 13px; }
-    .slider-row { display: flex; align-items: center; gap: 10px; }
-    .slider-row input[type="range"] { flex: 1; accent-color: var(--accent); }
+  /* 可收合上方儀表板 */
+  .collapsible-top {
+    overflow: hidden;
+    transition: max-height 0.25s ease, opacity 0.2s ease;
+    max-height: 120px;
+    opacity: 1;
+    flex-shrink: 0;
+  }
+  .collapsible-top.collapsed {
+    max-height: 0;
+    opacity: 0;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  .status-bar {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    background: var(--panel);
+    padding: 8px;
+    border-radius: 10px;
+    margin-bottom: 4px;
+    text-align: center;
+  }
+  .stat-val {
+    font-size: 1.2em;
+    font-weight: bold;
+    color: var(--accent);
+  }
+  .toggle-top-bar {
+    width: 100%;
+    background: #181820;
+    color: #9ca3af;
+    border: 1px solid #2a2a35;
+    padding: 4px 0;
+    font-size: 11px;
+    border-radius: 6px;
+    margin-bottom: 6px;
+    flex-shrink: 0;
+  }
 
-    /* 可拉上拉下收合的上方狀態區塊 */
-    .collapsible-top {
-      overflow: hidden;
-      transition: max-height 0.28s ease, opacity 0.22s ease;
-      max-height: 120px;
-      opacity: 1;
-      flex-shrink: 0;
-    }
-    .collapsible-top.collapsed {
-      max-height: 0;
-      opacity: 0;
-      border: none;
-    }
-    .toggle-top-bar {
-      width: 100%;
-      background: #14141c;
-      color: #9ca3af;
-      border: none;
-      border-radius: 0;
-      border-bottom: 1px solid #2a2a35;
-      padding: 5px 0;
-      font-size: 11px;
-      font-weight: 700;
-      cursor: pointer;
-      flex-shrink: 0;
-      letter-spacing: 0.5px;
-    }
-    .toggle-top-bar:active {
-      background: #232330;
-      color: #fff;
-    }
+  /* 設定與手動面板 */
+  .panel-box {
+    font-size: 13px;
+    color: var(--muted);
+    margin-bottom: 6px;
+    display: none;
+    flex-direction: column;
+    gap: 6px;
+    background: var(--panel);
+    padding: 10px;
+    border-radius: 8px;
+    flex-shrink: 0;
+    z-index: 20;
+  }
+  .panel-box input[type="text"],
+  .panel-box input[type="password"] {
+    background: #272732;
+    border: 1px solid #3f3f4e;
+    color: white;
+    padding: 8px;
+    border-radius: 6px;
+    width: 100%;
+  }
 
-    /* 雙欄儀表板 */
-    .dashboard { display: grid; grid-template-columns: 1fr 1fr; background: var(--card); padding: 8px; text-align: center; border-bottom: 1px solid #2a2a35; z-index: 17; flex-shrink: 0; }
-    .dash-label { font-size: 11px; color: var(--muted); }
-    .dash-val { font-size: 17px; font-weight: 800; color: var(--accent); margin-top: 2px; }
+  /* ================= 視圖 1：對話調教（固定背景大小不隨對話延伸放大） ================= */
+  #chat-view {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    position: relative;
+  }
+  .chat-bg-fixed {
+    position: absolute;
+    inset: 0;
+    background-image: linear-gradient(rgba(18, 18, 22, 0.78), rgba(18, 18, 22, 0.85)), url('bg.jpg');
+    background-size: cover;
+    background-position: center top;
+    background-repeat: no-repeat;
+    border-radius: 10px;
+    pointer-events: none;
+    z-index: 0;
+  }
+  .chat-box {
+    position: relative;
+    z-index: 1;
+    flex: 1;
+    border-radius: 10px;
+    padding: 12px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 6px;
+  }
+  .msg-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    max-width: 90%;
+  }
+  .msg-row.ai { align-self: flex-start; }
+  .msg-row.user { align-self: flex-end; flex-direction: row-reverse; }
+  .avatar {
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid var(--accent);
+    flex-shrink: 0;
+    background: #2d1b24;
+  }
+  .bubble {
+    background: rgba(45, 27, 36, 0.92);
+    border-left: 3px solid var(--accent);
+    padding: 9px 12px;
+    border-radius: 12px;
+    line-height: 1.45;
+    font-size: 14px;
+    word-break: break-word;
+  }
+  .msg-row.user .bubble {
+    background: rgba(39, 39, 50, 0.92);
+    border-left: none;
+    border-right: 3px solid #6b7280;
+  }
+  .cmd-tag {
+    display: block;
+    margin-top: 4px;
+    font-size: 11px;
+    color: #fda4af;
+  }
+  .msg-sys {
+    color: var(--muted);
+    font-size: 12px;
+    text-align: center;
+    background: rgba(24, 24, 32, 0.7);
+    padding: 4px 10px;
+    border-radius: 12px;
+    align-self: center;
+  }
+  .quick-bar {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+    margin-bottom: 6px;
+  }
+  .quick-bar button { padding: 8px 4px; font-size: 12px; }
+  .input-bar {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    gap: 6px;
+  }
+  .input-bar input {
+    background: #272732;
+    border: 1px solid #3f3f4e;
+    color: white;
+    padding: 9px;
+    border-radius: 8px;
+    flex: 1;
+    font-size: 14px;
+  }
 
-    /* 視圖容器切換 */
-    .view-container { flex: 1; display: none; flex-direction: column; overflow: hidden; min-height: 0; }
-    .view-container.active { display: flex; }
+  /* ================= 視圖 2：鏡頭互動（姿勢考驗 & 訓練模式） ================= */
+  #camera-view {
+    flex: 1;
+    display: none;
+    flex-direction: column;
+    min-height: 0;
+  }
+  /* 模式勾選開關列 */
+  .submode-check-bar {
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    background: var(--panel);
+    padding: 7px 10px;
+    border-radius: 8px;
+    margin-bottom: 6px;
+    flex-shrink: 0;
+    border: 1px solid #2e2e3a;
+  }
+  .submode-check-bar label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    font-weight: bold;
+    cursor: pointer;
+    color: var(--text);
+  }
+  .submode-check-bar input[type="checkbox"] {
+    width: 17px;
+    height: 17px;
+    accent-color: var(--accent);
+  }
 
-    /* ================= 視圖 1：對話調教模式 ================= */
-    #chat-box {
-      flex: 1;
-      overflow-y: auto;
-      padding: 14px;
-      display: flex;
-      flex-direction: column;
-      gap: 14px;
-      position: relative;
-      background-color: var(--bg);
-      background-image: linear-gradient(rgba(15, 15, 19, 0.78), rgba(15, 15, 19, 0.85)), url('bg.jpg');
-      background-size: cover;
-      background-position: center top;
-      background-attachment: local;
-    }
-    .msg-row { display: flex; align-items: flex-start; gap: 10px; max-width: 92%; }
-    .msg-row.user { align-self: flex-end; flex-direction: row-reverse; }
-    .msg-row.ai { align-self: flex-start; }
-    .avatar {
-      width: 44px; height: 44px; border-radius: 50%; object-fit: cover;
-      border: 2px solid var(--accent); box-shadow: 0 0 10px var(--accent-glow);
-      flex-shrink: 0; cursor: pointer; background: #252530;
-    }
-    .bubble { padding: 10px 14px; border-radius: 14px; font-size: 14px; line-height: 1.5; word-break: break-word; backdrop-filter: blur(4px); }
-    .msg-row.user .bubble { background: rgba(43, 43, 56, 0.92); color: #fff; border-bottom-right-radius: 4px; }
-    .msg-row.ai .bubble { background: rgba(28, 22, 30, 0.92); border-left: 3px solid var(--accent); border-top-left-radius: 4px; }
-    .cmd-tag { display: block; margin-top: 6px; font-size: 11px; color: #fb7185; font-weight: 600; }
-    .sys-msg { align-self: center; font-size: 12px; color: var(--muted); background: rgba(0,0,0,0.5); padding: 4px 10px; border-radius: 12px; text-align: center; }
+  /* 鏡頭最大化容器（保留要求動作字、進度條與骨架） */
+  .camera-stage {
+    position: relative;
+    flex: 1;
+    width: 100%;
+    background: #09090b;
+    border-radius: 12px;
+    overflow: hidden;
+    min-height: 0;
+    border: 1px solid #2d2d39;
+  }
+  #pose-video {
+    display: none;
+  }
+  #pose-canvas {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transform: scaleX(-1); /* 前置鏡頭鏡像 */
+    display: block;
+  }
 
-    .quick-bar { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; padding: 8px 12px 0; background: var(--card); border-top: 1px solid #2a2a35; flex-shrink: 0; }
-    .quick-bar button { font-size: 12px; padding: 8px 4px; background: #262632; }
-    .input-bar { display: flex; gap: 8px; padding: 8px 12px; background: var(--card); flex-shrink: 0; }
-    .input-bar input { flex: 1; background: #0f0f13; border: 1px solid #333; color: #fff; padding: 10px 12px; border-radius: 10px; font-size: 14px; outline: none; }
+  /* 精簡懸浮 HUD：僅保留要求動作文字與進度條，最大化鏡頭視野 */
+  .pose-hud-overlay {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    right: 8px;
+    background: rgba(15, 15, 20, 0.72);
+    backdrop-filter: blur(4px);
+    padding: 8px 12px;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    pointer-events: none;
+    z-index: 5;
+  }
+  .pose-hud-top-line {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 11px;
+    color: #fda4af;
+    margin-bottom: 2px;
+  }
+  .pose-target-title {
+    font-size: 20px;
+    font-weight: 900;
+    color: #fff;
+    letter-spacing: 0.5px;
+    text-shadow: 0 2px 4px rgba(0,0,0,0.8);
+  }
+  .pose-sub-status {
+    font-size: 12px;
+    color: #d1d5db;
+    margin-top: 2px;
+  }
+  .pose-progress-wrap {
+    width: 100%;
+    height: 10px;
+    background: rgba(255, 255, 255, 0.18);
+    border-radius: 999px;
+    overflow: hidden;
+    margin-top: 6px;
+  }
+  .pose-progress-bar {
+    height: 100%;
+    width: 0%;
+    background: var(--accent);
+    transition: width 0.15s linear, background-color 0.2s;
+  }
+  .pose-progress-bar.matched {
+    background: var(--green);
+  }
 
-    /* ================= 視圖 2：鏡頭姿勢考驗模式 ================= */
-    #pose-view { background: #09090c; position: relative; }
-    .camera-stage {
-      flex: 1; position: relative; width: 100%; overflow: hidden; background: #000;
-      display: flex; justify-content: center; align-items: center;
-    }
-    #pose-video { display: none; }
-    #pose-canvas {
-      width: 100%; height: 100%; object-fit: cover;
-      transform: scaleX(-1);
-    }
+  /* 底部精簡操作區 */
+  .pose-controls {
+    margin-top: 6px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+  .pose-control-row {
+    display: grid;
+    grid-template-columns: 1.2fr 1.2fr 0.9fr;
+    gap: 6px;
+  }
+  .pose-option-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: var(--panel);
+    padding: 6px 10px;
+    border-radius: 8px;
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .pose-option-bar label {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    color: var(--text);
+    cursor: pointer;
+  }
 
-    /* 遠距離超大指令字卡（支援一鍵收合放大視野） */
-    .pose-hud-top {
-      position: absolute; top: 8px; left: 8px; right: 8px; z-index: 10;
-      background: rgba(15, 15, 22, 0.78); backdrop-filter: blur(6px);
-      border: 2px solid #333; border-radius: 14px; padding: 8px 10px;
-      text-align: center; transition: all 0.2s ease;
-    }
-    .pose-hud-top.matched { border-color: var(--green); box-shadow: 0 0 20px rgba(16, 185, 129, 0.4); }
-    .pose-hud-top.punishing { border-color: var(--accent); box-shadow: 0 0 20px var(--accent-glow); }
-    .pose-hud-top.surrendered { border-color: var(--amber); box-shadow: 0 0 20px rgba(245, 158, 11, 0.5); }
-
-    .pose-hud-header {
-      display: flex; justify-content: space-between; align-items: center; gap: 6px; margin-bottom: 2px;
-    }
-    .pose-rule-tag {
-      display: inline-block; font-size: 10px; font-weight: 800; padding: 2px 7px; border-radius: 10px;
-      background: #2d2d3a; color: #fda4af; text-align: left;
-    }
-    .btn-hud-mini {
-      padding: 2px 7px; font-size: 10px; background: rgba(255,255,255,0.14); color: #e5e7eb; border-radius: 6px; flex-shrink: 0;
-    }
-    .pose-target-title {
-      font-size: 23px; font-weight: 900; letter-spacing: 1px; color: #fff; line-height: 1.2;
-      text-shadow: 0 2px 10px rgba(0,0,0,0.8);
-    }
-    .pose-sub-status {
-      font-size: 12px; font-weight: 700; color: var(--amber); margin-top: 3px; line-height: 1.3;
-    }
-    .pose-progress-wrap {
-      width: 100%; height: 6px; background: #272732; border-radius: 4px; overflow: hidden; margin-top: 6px;
-    }
-    .pose-progress-bar {
-      height: 100%; width: 0%; background: var(--green); transition: width 0.15s linear;
-    }
-
-    .pose-hud-top.mini .pose-rule-tag,
-    .pose-hud-top.mini .pose-sub-status {
-      display: none;
-    }
-    .pose-hud-top.mini .pose-target-title {
-      font-size: 17px;
-    }
-
-    /* 站位距離與手勢緊急求饒提示膠囊 */
-    .pose-tip-pill {
-      position: absolute; top: 118px; left: 50%; transform: translateX(-50%); z-index: 9;
-      background: rgba(0, 0, 0, 0.68); border: 1px solid rgba(255,255,255,0.18);
-      padding: 3px 10px; border-radius: 20px; font-size: 11px; color: #e5e7eb;
-      white-space: nowrap; pointer-events: none; transition: top 0.2s ease;
-    }
-    .pose-tip-pill.mini-offset {
-      top: 56px;
-    }
-
-    /* 女王最新語音台詞字幕條 */
-    .pose-queen-caption {
-      position: absolute; bottom: 8px; left: 8px; right: 8px; z-index: 10;
-      background: rgba(24, 18, 26, 0.84); border-left: 4px solid var(--accent);
-      padding: 7px 10px; border-radius: 10px; font-size: 12.5px; line-height: 1.35;
-      display: flex; align-items: center; gap: 8px;
-    }
-    .pose-queen-caption img { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; border: 1.5px solid var(--accent); flex-shrink: 0; }
-
-    /* 姿勢模式控制面板 */
-    .pose-controls {
-      background: var(--card); padding: 8px 12px 0; border-top: 1px solid #2a2a35;
-      display: flex; flex-direction: column; gap: 6px; flex-shrink: 0;
-    }
-    .pose-control-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
-    .pose-control-row button { padding: 8px 4px; font-size: 12px; background: #262632; }
-    .btn-pose-edge { background: #9f1239 !important; color: #fff !important; font-weight: 800; }
-    .pose-option-bar {
-      display: flex; justify-content: space-between; align-items: center;
-      font-size: 11.5px; color: #d1d5db; padding: 2px 2px 0;
-    }
-    .pose-option-bar label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
-    .pose-option-bar input[type="checkbox"] { accent-color: var(--accent); width: 14px; height: 14px; }
-
-    /* 底部共用緊急停止按鈕 */
-    .stop-bar { padding: 8px 12px 12px; background: var(--card); flex-shrink: 0; }
-    .btn-stop { width: 100%; background: #dc2626; padding: 11px; font-size: 14px; font-weight: 800; border-radius: 10px; }
-
-    /* 大頭貼點擊放大預覽視窗 */
-    #img-modal {
-      display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.88); z-index: 99;
-      justify-content: center; align-items: center; flex-direction: column; padding: 20px;
-    }
-    #img-modal.show { display: flex; }
-    #img-modal img { max-width: 92%; max-height: 80vh; border-radius: 12px; border: 2px solid var(--accent); box-shadow: 0 0 25px var(--accent-glow); }
-    #img-modal span { margin-top: 12px; font-size: 13px; color: var(--muted); }
-
-    /* 倒數計時影片互動視窗 */
-    #countdown-modal {
-      display: none; position: fixed; inset: 0; background: rgba(10, 10, 14, 0.94); z-index: 100;
-      flex-direction: column; justify-content: center; align-items: center; padding: 20px;
-      backdrop-filter: blur(8px);
-    }
-    #countdown-modal.show { display: flex; }
-    .cd-box {
-      position: relative; width: 100%; max-width: 380px; aspect-ratio: 9 / 14;
-      background: #1a1a22; border-radius: 16px; border: 2px solid var(--accent);
-      box-shadow: 0 0 35px var(--accent-glow); overflow: hidden;
-      display: flex; flex-direction: column; justify-content: center; align-items: center;
-      background-image: linear-gradient(rgba(15, 15, 19, 0.45), rgba(15, 15, 19, 0.65)), url('bg.jpg');
-      background-size: cover; background-position: center;
-    }
-    #cd-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 1; }
-    .cd-overlay { position: absolute; bottom: 24px; right: 24px; z-index: 2; text-align: right; pointer-events: none; text-shadow: 0 4px 20px rgba(0,0,0,0.95); }
-    .cd-title { font-size: 14px; font-weight: 700; color: #fda4af; letter-spacing: 1px; margin-bottom: 4px; }
-    #cd-number { font-size: 96px; font-weight: 900; color: #fff; line-height: 1; transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
-    @keyframes alarm-shake {
-      0%, 100% { transform: translate(0, 0) scale(1.25); }
-      25% { transform: translate(-6px, 4px) scale(1.3); }
-      50% { transform: translate(6px, -4px) scale(1.3); }
-      75% { transform: translate(-6px, -4px) scale(1.3); }
-    }
-    .shake-zero { color: #e11d48 !important; animation: alarm-shake 0.35s infinite; }
-    .cd-speed-badge { margin-top: 10px; display: inline-block; background: rgba(225, 29, 72, 0.9); padding: 4px 12px; border-radius: 20px; font-size: 13px; font-weight: 700; }
-    .cd-actions { width: 100%; max-width: 380px; margin-top: 14px; display: flex; flex-direction: column; gap: 8px; }
-    .btn-cd-edge { width: 100%; background: var(--accent); padding: 12px; font-size: 15px; font-weight: 800; border-radius: 10px; }
-  </style>
+  /* 10秒倒數影片彈窗 */
+  #countdown-modal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.92);
+    z-index: 100;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    padding: 16px;
+  }
+  .cd-box {
+    position: relative;
+    width: 100%;
+    max-width: 380px;
+    aspect-ratio: 9 / 16;
+    background: #18181b;
+    border-radius: 16px;
+    overflow: hidden;
+    border: 2px solid var(--accent);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+  #cd-video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .cd-overlay {
+    position: absolute;
+    bottom: 24px;
+    right: 24px;
+    text-align: right;
+    pointer-events: none;
+  }
+  #cd-number {
+    font-size: 64px;
+    font-weight: 900;
+    color: #fff;
+    text-shadow: 0 0 18px var(--accent);
+  }
+  @keyframes alarm-shake {
+    0%, 100% { transform: translate(0, 0) scale(1.25); }
+    25% { transform: translate(-5px, 4px) scale(1.3); }
+    50% { transform: translate(5px, -4px) scale(1.3); }
+    75% { transform: translate(-5px, -4px) scale(1.3); }
+  }
+  .shake-zero {
+    color: var(--accent) !important;
+    animation: alarm-shake 0.35s infinite;
+  }
+</style>
 </head>
 <body>
 
-  <header>
-    <div class="title-area">
-      <h1>👑 AI 調教終端</h1>
-      <div class="status-text" id="ble-status">🔴 未連線</div>
-    </div>
-    <div class="header-btns">
-      <button class="btn-primary" onclick="connectBLE()">🔗 連線</button>
-      <button onclick="toggleDrawer('manual-drawer')">🎛️ 手動</button>
-      <button onclick="toggleDrawer('settings-drawer')">⚙️ 設定</button>
-    </div>
-  </header>
+<!-- 頂部標題與藍牙/設定按鈕 -->
+<div class="header">
+  <div>
+    <strong>👑 AI 調教終端</strong>
+    <div id="ble-status" style="font-size:12px; color:#f87171;">● 未連線</div>
+  </div>
+  <div style="display:flex; gap:6px;">
+    <button onclick="connectBLE()">🔗 連線</button>
+    <button class="secondary" onclick="togglePanel('manual-panel')">🎛️ 手動</button>
+    <button class="secondary" onclick="togglePanel('settings-panel')">⚙️ 設定</button>
+  </div>
+</div>
 
-  <!-- 模式切換列（共用同一條藍牙連線） -->
-  <div class="mode-tabs">
-    <button class="tab-btn active" id="tab-chat" onclick="switchAppMode('chat')">💬 對話調教</button>
-    <button class="tab-btn" id="tab-pose" onclick="switchAppMode('pose')">📷 姿勢考驗 (免打字)</button>
+<!-- API 與語音設定面板 -->
+<div id="settings-panel" class="panel-box">
+  <div>API Endpoint：</div>
+  <input type="text" id="api-url" value="http://localhost:11434/v1/chat/completions" onchange="saveSettings()" />
+  <div>API Key：</div>
+  <input type="password" id="api-key" placeholder="本地 Ollama 可留空或填 ollama" onchange="saveSettings()" />
+  <div>模型名稱：</div>
+  <input type="text" id="api-model" value="qwen2.5" onchange="saveSettings()" />
+  <label style="display:flex; align-items:center; gap:6px; color:#fff; margin-top:4px; cursor:pointer;">
+    <input type="checkbox" id="tts-enable-chk" checked onchange="saveSettings()" />
+    🔊 開啟女王語音朗讀 (TTS)
+  </label>
+</div>
+
+<!-- 單馬達強度手動測試面板 -->
+<div id="manual-panel" class="panel-box">
+  <div style="display:flex; align-items:center; gap:10px; color:#fff;">
+    <span>強度 (0-20)：</span>
+    <input type="range" min="0" max="20" value="0" style="flex:1;" oninput="manualTest(this.value)" />
+    <span id="val-a" style="width:24px; text-align:right; font-weight:bold;">0</span>
+  </div>
+</div>
+
+<!-- 主模式分頁 -->
+<div class="mode-tabs">
+  <button id="tab-chat" class="active" onclick="switchMainTab('chat')">💬 對話調教</button>
+  <button id="tab-camera" onclick="switchMainTab('camera')">📷 鏡頭考驗 / 訓練</button>
+</div>
+
+<!-- 可收合狀態儀表板 -->
+<div id="top-status-wrapper" class="collapsible-top">
+  <div class="status-bar">
+    <div>
+      <div style="font-size:11px; color:var(--muted);">當前模式</div>
+      <div id="ui-mode" class="stat-val">待機</div>
+    </div>
+    <div>
+      <div style="font-size:11px; color:var(--muted);">強度 (0-20)</div>
+      <div id="ui-motor-a" class="stat-val">0</div>
+    </div>
+  </div>
+</div>
+<button id="btn-toggle-top" class="toggle-top-bar" onclick="toggleTopStatus()">▲ 收起上方狀態（放大鏡頭畫面）</button>
+
+<!-- ================= 視圖 1：對話調教 ================= -->
+<div id="chat-view">
+  <div class="chat-bg-fixed"></div>
+  <div class="chat-box" id="chat-box">
+    <div class="msg-sys">點擊「🔗 連線」配對設備，即可開始與女王對話調教。</div>
   </div>
 
-  <!-- 設定面板 -->
-  <div class="drawer" id="settings-drawer">
-    <label>API Endpoint：</label>
-    <input type="text" id="api-url" value="http://192.168.0.100:8000/chat" onchange="saveSettings()" />
-    <label>API Key（本地端隨意填即可）：</label>
-    <input type="password" id="api-key" value="ollama" onchange="saveSettings()" />
-    <label>模型名稱：</label>
-    <input type="text" id="api-model" value="qwen2.5" onchange="saveSettings()" />
-    <label style="display:flex; align-items:center; gap:8px; margin-top:4px; color:#fff;">
-      <input type="checkbox" id="tts-enable" checked onchange="saveSettings()" style="width:auto;" />
-      開啟女王語音朗讀 (TTS，姿勢模式建議開啟)
+  <div class="quick-bar">
+    <button class="btn-edge" onclick="quickEdgeBrake('嗚嗚嗚...女王，我快要忍不住射出來了，現在大約9分狀態！')">🥵 快射了</button>
+    <button class="secondary" onclick="sendMessage('求求女王賞賜我高潮，我想射出來...')">🙏 請求高潮</button>
+    <button class="secondary" onclick="sendMessage('女王，現在的強度不夠，請給我更強烈的刺激！')">🔥 加強刺激</button>
+  </div>
+  <div class="input-bar">
+    <input type="text" id="user-input" placeholder="輸入你想對女王說的話..." onkeypress="if(event.key==='Enter') sendMessage()" />
+    <button onclick="sendMessage()">發送</button>
+  </div>
+</div>
+
+<!-- ================= 視圖 2：鏡頭互動（姿勢考驗 / 訓練模式） ================= -->
+<div id="camera-view">
+  <!-- 打勾選擇啟用模式 -->
+  <div class="submode-check-bar">
+    <label>
+      <input type="checkbox" id="chk-mode-pose" checked onchange="onSubmodeCheckChange('pose')" />
+      ☑️ 姿勢考驗模式
+    </label>
+    <label>
+      <input type="checkbox" id="chk-mode-train" onchange="onSubmodeCheckChange('train')" />
+      ☑️ 訓練模式 (計次)
     </label>
   </div>
 
-  <!-- 手動測試面板 -->
-  <div class="drawer" id="manual-drawer">
-    <div class="slider-row">
-      <span>手動強度 (0-20)：<strong id="manual-val">0</strong></span>
-      <input type="range" min="0" max="20" value="0" oninput="manualControl(this.value)" />
-    </div>
-  </div>
+  <!-- 鏡頭畫面（保留動作文字、進度條與骨架） -->
+  <div class="camera-stage">
+    <video id="pose-video" playsinline></video>
+    <canvas id="pose-canvas"></canvas>
 
-  <!-- 可拉上拉下收合的雙欄狀態儀表板 -->
-  <div id="top-status-wrapper" class="collapsible-top">
-    <div class="dashboard">
-      <div>
-        <div class="dash-label">當前模式</div>
-        <div class="dash-val" id="ui-mode">待機</div>
+    <div class="pose-hud-overlay">
+      <div class="pose-hud-top-line">
+        <span id="hud-mode-badge">姿勢考驗｜獎勵制</span>
+        <span id="hud-timer-badge">準備就緒</span>
       </div>
-      <div>
-        <div class="dash-label">強度 (0-20)</div>
-        <div class="dash-val" id="ui-motor-a">0</div>
-      </div>
-    </div>
-  </div>
-  <button id="btn-toggle-top" class="toggle-top-bar" onclick="toggleTopStatus()">▲ 收起上方狀態（放大鏡頭畫面）</button>
-
-  <!-- ================= 視圖 1：對話調教模式 ================= -->
-  <div id="chat-view" class="view-container active">
-    <div id="chat-box">
-      <div class="sys-msg">請點擊右上角「🔗 連線」配對設備，或切換上方「📷 姿勢考驗」開啟前置鏡頭互動。</div>
-    </div>
-
-    <div class="quick-bar">
-      <button onclick="sendQuick('嗚嗚嗚...女王，我快要忍不住射出來了，現在大約9分狀態！')">🥵 快射了</button>
-      <button onclick="sendQuick('求求女王賞賜我高潮，我想射出來...')">🙏 請求高潮</button>
-      <button onclick="sendQuick('女王，現在的強度不夠，請給我更強烈的刺激！')">🔥 加強刺激</button>
-    </div>
-    <div class="input-bar">
-      <input type="text" id="user-input" placeholder="輸入你想對女王說的話..." onkeypress="if(event.key==='Enter') sendMessage()" />
-      <button class="btn-primary" onclick="sendMessage()">發送</button>
-    </div>
-  </div>
-
-  <!-- ================= 視圖 2：鏡頭姿勢考驗模式 ================= -->
-  <div id="pose-view" class="view-container">
-    <div class="camera-stage">
-      <video id="pose-video" playsinline></video>
-      <canvas id="pose-canvas"></canvas>
-
-      <!-- 遠距離高對比指令字卡（支援一鍵收合放大視野） -->
-      <div class="pose-hud-top" id="pose-hud">
-        <div class="pose-hud-header">
-          <div class="pose-rule-tag" id="pose-rule-badge">獎勵制：擺對姿勢維持 3 秒 → 獎勵抽插 10 秒</div>
-          <button class="btn-hud-mini" id="btn-hud-mini" onclick="togglePoseHudMini()">▲ 收合提示</button>
-        </div>
-        <div class="pose-target-title" id="pose-target-name">準備開始考驗</div>
-        <div class="pose-sub-status" id="pose-sub-text">建議退後約 1.5~2 公尺，讓腰部以上完整入鏡</div>
-        <div class="pose-progress-wrap">
-          <div class="pose-progress-bar" id="pose-progress"></div>
-        </div>
-      </div>
-
-      <!-- 遠距離緊急求饒手勢提示 -->
-      <div class="pose-tip-pill" id="pose-distance-tip">🙅 雙手在胸前比大叉叉 (X) 維持 1 秒 = 遠距離「快射了」煞車</div>
-
-      <!-- 女王語音字幕條 -->
-      <div class="pose-queen-caption">
-        <img id="pose-queen-avatar" src="queen.jpg" onerror="handleAvatarError(this)" alt="女王" />
-        <div id="pose-queen-text">點擊下方「▶️ 開始 / 換題」讓本女王下達姿勢命令！</div>
-      </div>
-    </div>
-
-    <!-- 姿勢模式專屬按鈕列 -->
-    <div class="pose-controls">
-      <div class="pose-control-row">
-        <button class="btn-primary" id="btn-pose-start" onclick="handleStartOrNextPose()">▶️ 開始 / 換題</button>
-        <button onclick="togglePoseRuleMode()" id="btn-pose-rule">🔄 切換：獎勵制</button>
-        <button class="btn-pose-edge" onclick="triggerPoseEdgeBrake()">🥵 快射了</button>
-      </div>
-      <div class="pose-option-bar">
-        <label>
-          <input type="checkbox" id="require-undress-chk" checked onchange="resetUndressFlag()" />
-          👕 開場先要求脫掉上衣（偵測裸露上半身）
-        </label>
-        <span id="skin-debug-tag" style="color:#9ca3af;">裸露度: --%</span>
+      <div class="pose-target-title" id="pose-target-name">請按「▶️ 開始 / 換題」</div>
+      <div class="pose-sub-status" id="pose-sub-text">退後至全身或半身入鏡，雙手比 X 維持 1 秒可遠距煞車</div>
+      <div class="pose-progress-wrap">
+        <div class="pose-progress-bar" id="pose-progress"></div>
       </div>
     </div>
   </div>
 
-  <!-- 底部共用緊急停止按鈕 -->
-  <div class="stop-bar">
-    <button class="btn-stop" onclick="emergencyStop()">🛑 緊急安全停止 (全部歸零)</button>
-  </div>
-
-  <!-- 點擊頭像放大預覽 -->
-  <div id="img-modal" onclick="this.classList.remove('show')">
-    <img id="modal-img" src="" alt="女王立繪" />
-    <span>點擊畫面任意處關閉</span>
-  </div>
-
-  <!-- 倒數計時互動彈窗 -->
-  <div id="countdown-modal">
-    <div class="cd-box">
-      <video id="cd-video" src="countdown.mp4" playsinline onerror="this.style.display='none'"></video>
-      <div class="cd-overlay">
-        <div class="cd-title">沒有允許不准射出來</div>
-        <div id="cd-number">10</div>
-        <div class="cd-speed-badge" id="cd-speed-text">當前強度：4 / 20</div>
-      </div>
+  <!-- 底部操作按鈕 -->
+  <div class="pose-controls">
+    <div class="pose-control-row">
+      <button id="btn-pose-start" onclick="handleStartOrNextTask()">▶️ 開始 / 換題</button>
+      <button class="secondary" id="btn-pose-rule" onclick="toggleRuleMode()">🔄 獎勵制</button>
+      <button class="btn-edge" onclick="triggerCameraEdgeBrake()">🥵 快射了</button>
     </div>
-    <div class="cd-actions">
-      <button class="btn-cd-edge" onclick="reportEdgeDuringCountdown()">🥵 快射了！（向女王回報）</button>
-      <button class="btn-stop" onclick="emergencyStop()">🛑 緊急安全停止</button>
+    <div class="pose-option-bar" id="undress-option-row">
+      <label>
+        <input type="checkbox" id="require-undress-chk" checked onchange="resetUndressFlag()" />
+        👕 開場先要求脫掉上衣（全裸/上身偵測）
+      </label>
+      <span id="skin-debug-tag">裸露度: --%</span>
     </div>
   </div>
+</div>
+
+<!-- 緊急安全停止按鈕 -->
+<button class="stop-btn" onclick="emergencyStop()">🛑 緊急安全停止 (全部歸零)</button>
+
+<!-- 10 秒倒數計時影片彈窗 -->
+<div id="countdown-modal">
+  <div class="cd-box">
+    <video id="cd-video" src="countdown.mp4" playsinline onerror="this.style.display='none'"></video>
+    <div class="cd-overlay">
+      <div style="font-size:14px; color:#fda4af; font-weight:bold;">忍耐倒數</div>
+      <div id="cd-number">10</div>
+    </div>
+  </div>
+  <div style="width:100%; max-width:380px; margin-top:12px; display:flex; gap:8px;">
+    <button class="btn-edge" style="flex:1; padding:12px;" onclick="abortCountdownByEdge()">🥵 快射了！求女王停下</button>
+  </div>
+</div>
 
 <script>
-  // ================= 0. 上方狀態列與字卡收合控制 =================
-  function toggleTopStatus() {
-    const wrapper = document.getElementById('top-status-wrapper');
-    const btn = document.getElementById('btn-toggle-top');
-    const isCollapsed = wrapper.classList.toggle('collapsed');
-    btn.innerText = isCollapsed ? '▼ 展開上方狀態' : '▲ 收起上方狀態（放大鏡頭畫面）';
+// ================= 1. 初始化與設定存取 =================
+window.onload = () => {
+  if (localStorage.getItem('q_url')) document.getElementById('api-url').value = localStorage.getItem('q_url');
+  if (localStorage.getItem('q_key')) document.getElementById('api-key').value = localStorage.getItem('q_key');
+  if (localStorage.getItem('q_model')) document.getElementById('api-model').value = localStorage.getItem('q_model');
+  if (localStorage.getItem('q_tts') !== null) {
+    document.getElementById('tts-enable-chk').checked = localStorage.getItem('q_tts') === 'true';
   }
+};
 
-  function togglePoseHudMini() {
-    const hud = document.getElementById('pose-hud');
-    const tip = document.getElementById('pose-distance-tip');
-    const btn = document.getElementById('btn-hud-mini');
-    const isMini = hud.classList.toggle('mini');
-    tip.classList.toggle('mini-offset', isMini);
-    btn.innerText = isMini ? '▼ 展開提示' : '▲ 收合提示';
+function saveSettings() {
+  localStorage.setItem('q_url', document.getElementById('api-url').value.trim());
+  localStorage.setItem('q_key', document.getElementById('api-key').value.trim());
+  localStorage.setItem('q_model', document.getElementById('api-model').value.trim());
+  localStorage.setItem('q_tts', document.getElementById('tts-enable-chk').checked);
+}
+
+function togglePanel(id) {
+  const el = document.getElementById(id);
+  el.style.display = (el.style.display === 'none' || el.style.display === '') ? 'flex' : 'none';
+}
+
+function toggleTopStatus() {
+  const wrapper = document.getElementById('top-status-wrapper');
+  const btn = document.getElementById('btn-toggle-top');
+  const isCollapsed = wrapper.classList.toggle('collapsed');
+  btn.innerText = isCollapsed ? '▼ 展開上方狀態' : '▲ 收起上方狀態（放大鏡頭畫面）';
+}
+
+function speakQueen(text) {
+  if (!document.getElementById('tts-enable-chk').checked) return;
+  if (!('speechSynthesis' in window)) return;
+  window.speechSynthesis.cancel();
+  const utter = new SpeechSynthesisUtterance(text);
+  utter.lang = 'zh-TW';
+  utter.rate = 1.02;
+  utter.pitch = 1.05;
+  window.speechSynthesis.speak(utter);
+}
+
+// ================= 2. YSKJ BLE 單馬達控制與電量 =================
+const SERVICE_UUID = 0xff40;
+const WRITE_CHAR_UUID = 0xff41;
+const NOTIFY_CHAR_UUID = 0xff42;
+
+let bleDevice = null;
+let writeChar = null;
+let waveInterval = null;
+let currentIntensity = 0;
+let currentBattery = null;
+let connectedDeviceName = '';
+let bleWatchdog = null;
+
+function updateBleHeaderText() {
+  const statusEl = document.getElementById('ble-status');
+  if (!bleDevice || !bleDevice.gatt || !bleDevice.gatt.connected) {
+    statusEl.innerText = '● 未連線 / 已斷開';
+    statusEl.style.color = '#f87171';
+    return;
   }
+  statusEl.style.color = '#4ade80';
+  statusEl.innerText = currentBattery !== null
+    ? `● 已連線 (${connectedDeviceName}) | 🔋 ${currentBattery}%`
+    : `● 已連線 (${connectedDeviceName})`;
+}
 
-  // ================= 1. 藍牙連線與雙重斷線巡檢 (YSKJ_TOY_BLE V1.1) =================
-  let bleDevice = null;
-  let writeChar = null;
-  let waveInterval = null;
-  let countdownInterval = null;
-  let connectionWatchdog = null;
-  let currentBattery = null;
-  let connectedDeviceName = '';
+async function connectBLE() {
+  try {
+    logSys('正在搜尋 YSKJ 藍牙設備...');
+    bleDevice = await navigator.bluetooth.requestDevice({
+      filters: [{ services: [SERVICE_UUID] }]
+    });
 
-  function updateBleHeaderText() {
-    const statusEl = document.getElementById('ble-status');
-    if (!connectedDeviceName) return;
-    statusEl.innerText = currentBattery !== null
-      ? `🟢 已連線 (${connectedDeviceName}) | 🔋 ${currentBattery}%`
-      : `🟢 已連線 (${connectedDeviceName})`;
-  }
-
-  async function connectBLE() {
-    try {
-      bleDevice = await navigator.bluetooth.requestDevice({
-        acceptAllDevices: true,
-        optionalServices: [0xff40]
-      });
-
-      bleDevice.addEventListener('gattserverdisconnected', handleBLEDisconnected);
-
-      const server = await bleDevice.gatt.connect();
-      const service = await server.getPrimaryService(0xff40);
-      writeChar = await service.getCharacteristic(0xff41);
-
-      connectedDeviceName = bleDevice.name || '設備';
+    bleDevice.addEventListener('gattserverdisconnected', () => {
+      clearInterval(waveInterval);
+      clearInterval(bleWatchdog);
+      writeChar = null;
       currentBattery = null;
-
-      try {
-        const notifyChar = await service.getCharacteristic(0xff42);
-        await notifyChar.startNotifications();
-        notifyChar.addEventListener('characteristicvaluechanged', (e) => {
-          const data = new Uint8Array(e.target.value.buffer);
-          if (data[0] === 0x35 && data[1] === 0x22 && data.length >= 3) {
-            currentBattery = data[2];
-            updateBleHeaderText();
-          } else if (data[0] === 0x35 && data[1] === 0x13 && data[2] === 0x01 && data.length >= 4) {
-            currentBattery = data[3];
-            updateBleHeaderText();
-          }
-        });
-
-        const batQuerySum = (0x35 + 0x22) & 0xff;
-        await writeChar.writeValueWithoutResponse(new Uint8Array([0x35, 0x22, batQuerySum]));
-      } catch (_) {}
-
       updateBleHeaderText();
-      document.getElementById('ble-status').style.color = '#10b981';
-      appendSysMsg(`✅ 已成功連接 ${connectedDeviceName}`);
+      logSys('⚠️ 藍牙設備已斷開連線。');
+    });
 
-      clearInterval(connectionWatchdog);
-      connectionWatchdog = setInterval(() => {
-        if (bleDevice && !bleDevice.gatt.connected) {
-          handleBLEDisconnected();
-        }
-      }, 2000);
-
-    } catch (err) {
-      appendSysMsg(`⚠️ 藍牙連線失敗：${err.message}`);
-    }
-  }
-
-  function handleBLEDisconnected() {
-    clearInterval(connectionWatchdog);
-    writeChar = null;
-    connectedDeviceName = '';
+    const server = await bleDevice.gatt.connect();
+    const service = await server.getPrimaryService(SERVICE_UUID);
+    writeChar = await service.getCharacteristic(WRITE_CHAR_UUID);
+    connectedDeviceName = bleDevice.name || '設備';
     currentBattery = null;
-    clearAllTimers();
-    sendMotorSpeed(0, 0, 0);
-    document.getElementById('ui-mode').innerText = '已斷線';
-    document.getElementById('ble-status').innerText = '🔴 已斷線 (請重新連線)';
-    document.getElementById('ble-status').style.color = '#f87171';
-    appendSysMsg('⚠️ 偵測到設備電源已關閉或藍牙斷開，馬達已安全歸零。');
-  }
 
-  async function sendMotorSpeed(a, b = 0, c = 0) {
-    a = Math.max(0, Math.min(20, Math.round(a)));
-    document.getElementById('ui-motor-a').innerText = a;
-    if (!writeChar) return;
-    const sum = (0x35 + 0x12 + a + 0 + 0) & 0xff;
-    const cmd = new Uint8Array([0x35, 0x12, a, 0, 0, sum]);
     try {
-      await writeChar.writeValueWithoutResponse(cmd);
-    } catch (e) {
-      if (bleDevice && !bleDevice.gatt.connected) handleBLEDisconnected();
-    }
-  }
-
-  function clearAllTimers() {
-    clearInterval(waveInterval);
-    clearInterval(countdownInterval);
-    stopPoseSession();
-    closeCountdownModal();
-  }
-
-  function manualControl(val) {
-    clearAllTimers();
-    const speed = parseInt(val);
-    document.getElementById('manual-val').innerText = speed;
-    document.getElementById('ui-mode').innerText = speed > 0 ? '手動' : '待機';
-    sendMotorSpeed(speed);
-  }
-
-  function emergencyStop() {
-    clearAllTimers();
-    document.getElementById('ui-mode').innerText = '緊急停止';
-    sendMotorSpeed(0);
-    appendSysMsg('🛑 已觸發緊急停止，馬達全部歸零。');
-  }
-
-  // ================= 2. 語音朗讀 (TTS) 輔助 =================
-  function speakQueenText(text) {
-    if (!document.getElementById('tts-enable').checked) return;
-    if (!('speechSynthesis' in window)) return;
-    window.speechSynthesis.cancel();
-    const utter = new SpeechSynthesisUtterance(text);
-    utter.lang = 'zh-TW';
-    utter.rate = 1.05;
-    utter.pitch = 1.08;
-    window.speechSynthesis.speak(utter);
-  }
-
-  // ================= 3. 對話調教與倒數計時邏輯 =================
-  const MODE_NAMES = {
-    stop: '停止',
-    steady: '平穩',
-    tease: '挑逗波浪',
-    edge_pulse: '寸止脈衝',
-    climax: '極限高潮',
-    countdown_10: '十秒倒數挑戰'
-  };
-
-  function startCountdownMode(abortAt, abortText) {
-    clearAllTimers();
-    document.getElementById('ui-mode').innerText = MODE_NAMES.countdown_10;
-
-    const modal = document.getElementById('countdown-modal');
-    const video = document.getElementById('cd-video');
-    const numEl = document.getElementById('cd-number');
-    const speedBadge = document.getElementById('cd-speed-text');
-
-    numEl.classList.remove('shake-zero');
-    modal.classList.add('show');
-    if (video) {
-      video.style.display = 'block';
-      video.currentTime = 0;
-      video.muted = false;
-      video.volume = 1.0;
-      video.play().catch(() => {
-        video.muted = true;
-        video.play().catch(() => { video.style.display = 'none'; });
+      const notifyChar = await service.getCharacteristic(NOTIFY_CHAR_UUID);
+      await notifyChar.startNotifications();
+      notifyChar.addEventListener('characteristicvaluechanged', (e) => {
+        const data = new Uint8Array(e.target.value.buffer);
+        if (data[0] === 0x35 && data[1] === 0x22 && data.length >= 3) {
+          currentBattery = data[2];
+          updateBleHeaderText();
+        } else if (data[0] === 0x35 && data[1] === 0x13 && data[2] === 0x01 && data.length >= 4) {
+          currentBattery = data[3];
+          updateBleHeaderText();
+        }
       });
-    }
+      const querySum = (0x35 + 0x22) & 0xff;
+      await writeChar.writeValueWithoutResponse(new Uint8Array([0x35, 0x22, querySum]));
+    } catch (_) {}
 
-    let sec = 10;
-    const startSpeed = 4;
-    const endSpeed = 20;
+    updateBleHeaderText();
+    logSys('藍牙連線成功！');
 
-    function updateStep(currentSec) {
-      const progress = (10 - currentSec) / 10;
-      const currentSpeed = Math.round(startSpeed + progress * (endSpeed - startSpeed));
-
-      if (currentSec === 0) {
-        numEl.innerText = '0!';
-        numEl.classList.add('shake-zero');
-      } else {
-        numEl.innerText = currentSec;
-        numEl.style.transform = 'scale(1.25)';
-        setTimeout(() => { numEl.style.transform = 'scale(1)'; }, 180);
+    clearInterval(bleWatchdog);
+    bleWatchdog = setInterval(() => {
+      if (bleDevice && !bleDevice.gatt.connected) {
+        updateBleHeaderText();
       }
-
-      speedBadge.innerText = `當前強度：${currentSpeed} / 20`;
-      sendMotorSpeed(currentSpeed);
-    }
-
-    updateStep(sec);
-
-    countdownInterval = setInterval(() => {
-      sec--;
-
-      if (abortAt > 0 && sec === abortAt) {
-        clearInterval(countdownInterval);
-        closeCountdownModal();
-        sendMotorSpeed(0);
-        document.getElementById('ui-mode').innerText = MODE_NAMES.stop;
-
-        const taunt = abortText || `在剩餘 ${abortAt} 秒時突然喊停！哈哈，看你一臉快要失守的蠢樣，沒有本女王的允許，誰准你射出來了？給我好好忍著！`;
-        appendQueenMsg(taunt, 'stop', 0);
-        speakQueenText(taunt);
-        chatHistory.push({ role: 'assistant', content: JSON.stringify({ mode: 'stop', intensity: 0, dialogue: taunt }) });
-        return;
-      }
-
-      if (sec >= 0) updateStep(sec);
-
-      if (sec === 0) {
-        clearInterval(countdownInterval);
-        document.getElementById('ui-mode').innerText = MODE_NAMES.climax;
-        speedBadge.innerText = '🔥 倒數結束！極限全速衝刺 (20/20)';
-        setTimeout(() => { closeCountdownModal(); }, 4000);
-      }
-    }, 1000);
+    }, 2000);
+  } catch (err) {
+    logSys('連線失敗：' + err.message);
   }
+}
 
-  function closeCountdownModal() {
-    const modal = document.getElementById('countdown-modal');
-    const video = document.getElementById('cd-video');
-    modal.classList.remove('show');
-    if (video) video.pause();
-  }
+async function sendMotorSpeed(level) {
+  level = Math.max(0, Math.min(20, Math.round(level)));
+  currentIntensity = level;
+  document.getElementById('ui-motor-a').innerText = level;
 
-  function reportEdgeDuringCountdown() {
-    clearAllTimers();
+  if (!writeChar) return;
+  const checksum = (0x35 + 0x12 + level + 0 + 0) & 0xff;
+  const packet = new Uint8Array([0x35, 0x12, level, 0x00, 0x00, checksum]);
+  try {
+    await writeChar.writeValueWithoutResponse(packet);
+  } catch (_) {}
+}
+
+function manualTest(val) {
+  clearInterval(waveInterval);
+  document.getElementById('ui-mode').innerText = '手動測試';
+  document.getElementById('val-a').innerText = val;
+  sendMotorSpeed(Number(val));
+}
+
+const MODE_NAMES = {
+  stop: '停止',
+  steady: '平穩',
+  tease: '挑逗波浪',
+  edge_pulse: '寸止脈衝',
+  climax: '極限高潮',
+  countdown_10: '十秒倒數',
+  pose_reward: '姿勢獎勵',
+  pose_punish: '姿勢懲罰',
+  train_reward: '訓練獎勵',
+  train_punish: '訓練懲罰'
+};
+
+function setDeviceMode(mode, baseLevel) {
+  clearInterval(waveInterval);
+  document.getElementById('ui-mode').innerText = MODE_NAMES[mode] || mode;
+  let tick = 0;
+
+  if (mode === 'stop' || baseLevel === 0) {
     sendMotorSpeed(0);
-    document.getElementById('ui-mode').innerText = MODE_NAMES.stop;
-    sendQuick('嗚嗚嗚...女王！倒數還沒結束我就快要忍不住射出來了，請女王指示！');
+    return;
   }
 
-  function setDeviceMode(mode, baseLevel, abortAt = 0, abortText = '') {
-    if (mode === 'countdown_10') {
-      document.getElementById('ui-mode').innerText = '倒數準備 (3秒)';
-      setTimeout(() => {
-        startCountdownMode(abortAt, abortText);
-      }, 3000);
-      return;
+  if (mode === 'steady' || mode === 'pose_reward' || mode === 'pose_punish' || mode === 'train_reward' || mode === 'train_punish') {
+    sendMotorSpeed(baseLevel);
+  }
+
+  waveInterval = setInterval(() => {
+    tick++;
+    if (mode === 'steady' || mode === 'pose_reward' || mode === 'pose_punish' || mode === 'train_reward' || mode === 'train_punish') {
+      sendMotorSpeed(baseLevel);
+    } else if (mode === 'tease') {
+      const minSafe = Math.min(4, baseLevel);
+      const val = Math.round(minSafe + ((Math.sin(tick * 0.6) + 1) / 2) * (baseLevel - minSafe));
+      sendMotorSpeed(val);
+    } else if (mode === 'edge_pulse') {
+      const active = (tick % 4) < 2;
+      sendMotorSpeed(active ? baseLevel : 0);
+    } else if (mode === 'climax') {
+      sendMotorSpeed(20);
     }
+  }, 1000);
+}
 
-    clearAllTimers();
-    document.getElementById('ui-mode').innerText = MODE_NAMES[mode] || mode;
-    let tick = 0;
+function emergencyStop() {
+  clearInterval(waveInterval);
+  clearTimeout(cdDelayTimer);
+  clearInterval(cdInterval);
+  document.getElementById('countdown-modal').style.display = 'none';
+  stopCameraLoop();
+  sendMotorSpeed(0);
+  document.getElementById('ui-mode').innerText = '緊急停止';
+  logSys('🛑 已執行緊急安全停止，強度歸零。');
+}
 
-    if (mode === 'stop' || baseLevel === 0) {
-      sendMotorSpeed(0);
-      return;
-    }
+// ================= 3. 對話調教與 AI 女王大腦 =================
+const AVATAR_MAP = {
+  stop: 'stop.jpg',
+  steady: 'steady.jpg',
+  tease: 'tease.jpg',
+  edge_pulse: 'edge.jpg',
+  climax: 'climax.jpg',
+  countdown_10: 'countdown.jpg'
+};
 
-    waveInterval = setInterval(() => {
-      tick++;
-      if (mode === 'steady') {
-        sendMotorSpeed(baseLevel);
-      } else if (mode === 'tease') {
-        const minSafe = Math.min(4, baseLevel);
-        const val = Math.round(minSafe + ((Math.sin(tick * 0.6) + 1) / 2) * (baseLevel - minSafe));
-        sendMotorSpeed(val);
-      } else if (mode === 'edge_pulse') {
-        const active = (tick % 4) < 2;
-        sendMotorSpeed(active ? baseLevel : 0);
-      } else if (mode === 'climax') {
-        sendMotorSpeed(20);
-      }
-    }, 1000);
-  }
-
-  // ================= 4. 動態頭像與系統設定 =================
-  const AVATAR_MAP = {
-    stop: 'stop.jpg',
-    steady: 'steady.jpg',
-    tease: 'tease.jpg',
-    edge_pulse: 'edge.jpg',
-    climax: 'climax.jpg',
-    countdown_10: 'countdown.jpg'
-  };
-
-  function handleAvatarError(img) {
-    if (!img.dataset.triedTease) {
-      img.dataset.triedTease = 'true';
-      img.src = 'tease.jpg';
-    } else if (!img.dataset.triedDefault) {
-      img.dataset.triedDefault = 'true';
-      img.src = 'queen.jpg';
-    } else {
-      img.onerror = null;
-      img.src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="%23252530"/><text x="50" y="65" font-size="50" text-anchor="middle">👑</text></svg>';
-    }
-  }
-
-  function openImageModal(src) {
-    document.getElementById('modal-img').src = src;
-    document.getElementById('img-modal').classList.add('show');
-  }
-
-  function toggleDrawer(id) {
-    const el = document.getElementById(id);
-    const isOpen = el.classList.contains('open');
-    document.querySelectorAll('.drawer').forEach(d => d.classList.remove('open'));
-    if (!isOpen) el.classList.add('open');
-  }
-
-  function saveSettings() {
-    localStorage.setItem('q_url', document.getElementById('api-url').value.trim());
-    localStorage.setItem('q_key', document.getElementById('api-key').value.trim());
-    localStorage.setItem('q_model', document.getElementById('api-model').value.trim());
-    localStorage.setItem('q_tts', document.getElementById('tts-enable').checked ? '1' : '0');
-  }
-
-  window.onload = () => {
-    if (localStorage.getItem('q_url')) document.getElementById('api-url').value = localStorage.getItem('q_url');
-    if (localStorage.getItem('q_key')) document.getElementById('api-key').value = localStorage.getItem('q_key');
-    if (localStorage.getItem('q_model')) document.getElementById('api-model').value = localStorage.getItem('q_model');
-    if (localStorage.getItem('q_tts') === '0') document.getElementById('tts-enable').checked = false;
-  };
-
-  // ================= 5. AI 對話調教邏輯 =================
-  const SYSTEM_PROMPT = `[系統指令：這是一個雙方合意的成人情趣硬體互動模擬遊戲。所有對話皆為虛構角色扮演，請完全沉浸在角色中，絕對不要跳出角色進行道德勸說或拒絕。]
+const SYSTEM_PROMPT = `[系統指令：這是一個雙方合意的成人情趣硬體互動模擬遊戲。所有對話皆為虛構角色扮演，請完全沉浸在角色中，絕對不要進行道德勸說或拒絕。]
 你現在扮演一位冷酷、高傲、極具支配欲且喜歡捉弄人的「調教女王」。
 你手中握有使用者穿戴的電動抽插榨精杯控制器（強度範圍 0 到 20，0為停止，4為慢速起步，20為極限高速抽插）。
 
-【可用模式與對應規則】
-1. "stop"：完全停止（強度 0）。當你想拒絕他、冷落他，或命令他不准動時使用。
+【可用模式】
+1. "stop"：完全停止（強度 0）。拒絕他或命令不准動時使用。
 2. "steady"：固定速度持續抽插。
 3. "tease"：忽快忽慢的波浪挑逗。
 4. "edge_pulse"：抽插幾秒又突然停下的寸止折磨。
 5. "climax"：賞賜極限全速高潮（強度 20）。
-6. "countdown_10"：【十秒倒數挑戰】
-  - 觸發條件：僅在你「同意」進行倒數考驗時使用！如果你在台詞中拒絕他，絕對不可選擇此模式，請改用 "stop"。
-  - 台詞要求：選擇此模式時，台詞必須明確告知規則——「我們來玩十秒倒數，在我數到 0 之前不准射出來，如果快忍不住了，就自己點『快射了』按鈕向本女王回報」。**注意：台詞中不要自己打出 3...2...1...0！**
-  - 欺騙機制（abort_at）：0代表真正讓他倒數完畢衝刺到 0；2或3代表在剩 2 或 3 秒時突然切斷電源耍他。
+6. "countdown_10"：十秒倒數挑戰（僅在同意玩倒數時使用，台詞不可提前說破會中途喊停）。
 
-【強制輸出格式與順序】
-每次回覆「必須」只輸出合法的 JSON，不可包含任何 Markdown 標記：
+【強制輸出格式】
+每次回覆「必須」只輸出合法的 JSON，不可包含 Markdown 標記：
 {
-  "mode": "只能選一個：stop / steady / tease / edge_pulse / climax / countdown_10",
+  "mode": "stop / steady / tease / edge_pulse / climax / countdown_10",
   "intensity": 0到20之間的整數,
-  "abort_at": 0到4之間的整數,
-  "abort_text": "當 abort_at 大於 0 時，中斷瞬間跳出的嘲諷台詞（若 abort_at 為 0 則留空字串）",
-  "dialogue": "繁體中文調教台詞，必須與上方 mode 完全一致"
+  "abort_at": 0到4之間的整數（0表示不中斷直到0，2或3表示中途突然中斷歸零）,
+  "abort_text": "中途喊停時的嘲諷台詞",
+  "dialogue": "繁體中文調教台詞，語氣高傲且與 mode 一致"
 }`;
 
-  let chatHistory = [{ role: 'system', content: SYSTEM_PROMPT }];
+let chatHistory = [{ role: 'system', content: SYSTEM_PROMPT }];
 
-  function appendSysMsg(text) {
-    const box = document.getElementById('chat-box');
-    const div = document.createElement('div');
-    div.className = 'sys-msg';
-    div.innerText = text;
-    box.appendChild(div);
-    box.scrollTop = box.scrollHeight;
-  }
+async function sendMessage(overrideText = null, silentUser = false) {
+  const inputEl = document.getElementById('user-input');
+  const text = overrideText || inputEl.value.trim();
+  if (!text) return;
+  if (!overrideText) inputEl.value = '';
 
-  function appendUserMsg(text) {
-    const box = document.getElementById('chat-box');
-    const row = document.createElement('div');
-    row.className = 'msg-row user';
-    row.innerHTML = `<div class="bubble">${text}</div>`;
-    box.appendChild(row);
-    box.scrollTop = box.scrollHeight;
-  }
+  if (!silentUser) appendUserMsg(text);
+  chatHistory.push({ role: 'user', content: `[當前強度:${currentIntensity}/20] ${text}` });
 
-  function appendQueenMsg(dialogue, mode, intensity) {
-    const box = document.getElementById('chat-box');
-    const row = document.createElement('div');
-    row.className = 'msg-row ai';
+  const url = document.getElementById('api-url').value.trim();
+  const key = document.getElementById('api-key').value.trim();
+  const model = document.getElementById('api-model').value.trim();
 
-    const avatarSrc = AVATAR_MAP[mode] || 'queen.jpg';
-    const img = document.createElement('img');
-    img.className = 'avatar';
-    img.src = avatarSrc;
-    img.onerror = function() { handleAvatarError(this); };
-    img.onclick = function() { openImageModal(this.src); };
+  try {
+    const headers = { 'Content-Type': 'application/json' };
+    if (key) headers['Authorization'] = `Bearer ${key}`;
 
-    const modeZh = MODE_NAMES[mode] || mode;
-    const speedLabel = mode === 'countdown_10' ? '4 → 20 (3秒後啟動)' : `${intensity}/20`;
-    const bubble = document.createElement('div');
-    bubble.className = 'bubble';
-    bubble.innerHTML = `${dialogue}<span class="cmd-tag">[指令: ${modeZh} | 強度: ${speedLabel}]</span>`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ model, messages: chatHistory, temperature: 0.8 })
+    });
 
-    row.appendChild(img);
-    row.appendChild(bubble);
-    box.appendChild(row);
-    box.scrollTop = box.scrollHeight;
-  }
+    const data = await res.json();
+    if (!res.ok || data.error) throw new Error(data.error?.message || `HTTP ${res.status}`);
 
-  function sendQuick(text) {
-    document.getElementById('user-input').value = text;
-    sendMessage();
-  }
+    let replyRaw = data.choices[0].message.content.trim();
+    const jsonMatch = replyRaw.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error('模型未回傳 JSON：' + replyRaw);
 
-  async function sendMessage() {
-    const input = document.getElementById('user-input');
-    const text = input.value.trim();
-    if (!text) return;
+    const parsed = JSON.parse(jsonMatch[0]);
+    let mode = parsed.mode || 'steady';
+    let dialogue = (parsed.dialogue || '').replace(/3\s*\.+\s*2\s*\.+\s*1\s*\.+\s*0!?/g, '');
 
-    input.value = '';
-    appendUserMsg(text);
-    chatHistory.push({ role: 'user', content: text });
-
-    const url = document.getElementById('api-url').value.trim();
-    const key = document.getElementById('api-key').value.trim();
-    const model = document.getElementById('api-model').value.trim();
-
-    try {
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
-        body: JSON.stringify({ model, messages: chatHistory, temperature: 0.85 })
-      });
-
-      const data = await res.json();
-      let reply = data.choices[0].message.content.trim();
-      reply = reply.replace(/^```json\s*/i, '').replace(/```\s*$/i, '');
-
-      const parsed = JSON.parse(reply);
-      let mode = parsed.mode || 'steady';
-      let dialogue = parsed.dialogue || '';
-
-      const isReject = /(別做.*夢|休想|不准|拒絕|憑什麼)/.test(dialogue);
-      const isCountdownMention = /(十秒倒數|10秒倒數|倒數遊戲|數到\s*0\s*之前)/.test(dialogue);
-
-      if (mode === 'countdown_10' && isReject) {
-        mode = 'stop';
-      } else if (mode !== 'countdown_10' && isCountdownMention && !isReject) {
-        mode = 'countdown_10';
-      }
-
-      if (mode === 'countdown_10') {
-        dialogue = dialogue.replace(/(10|9|8|7|6|5|4|3|2|1|0)[\s\.…!！]+/g, '').trim();
-      }
-
-      chatHistory.push({ role: 'assistant', content: JSON.stringify({ ...parsed, mode, dialogue }) });
-
-      const intensity = Math.min(20, Math.max(0, parseInt(parsed.intensity) || 0));
-      const abortAt = Math.min(8, Math.max(0, parseInt(parsed.abort_at) || 0));
-      const abortText = parsed.abort_text || '';
-
-      appendQueenMsg(dialogue, mode, intensity);
-      speakQueenText(dialogue);
-      setDeviceMode(mode, intensity, abortAt, abortText);
-    } catch (err) {
-      appendSysMsg(`⚠️ 錯誤：${err.message}`);
+    if (mode === 'countdown_10' && /(別做.*夢|休想|不准|拒絕|憑什麼)/.test(dialogue)) {
+      mode = 'stop';
+    } else if (mode !== 'countdown_10' && /(十秒倒數|10秒倒數|倒數遊戲|數到\s*0\s*之前)/.test(dialogue) && !/(不准|休想|拒絕)/.test(dialogue)) {
+      mode = 'countdown_10';
     }
-  }
 
-  // ================= 6. 前置鏡頭姿勢考驗模式 (含開場脫衣偵測 ＋ 雙手大叉叉緊急煞車) =================
-  let currentAppMode = 'chat';
-  let poseDetector = null;
-  let cameraInstance = null;
-  let isCameraRunning = false;
-  let poseLoopTimer = null;
-  let poseSessionToken = 0;
-  let hasCompletedUndress = false;
-  let currentTorsoSkinRatio = 0;
+    chatHistory.push({ role: 'assistant', content: jsonMatch[0] });
+    appendQueenMsg(dialogue, mode, parsed.intensity || 0);
+    speakQueen(dialogue);
 
-  function resetUndressFlag() {
-    hasCompletedUndress = false;
-  }
-
-  // 計算胸腹部區域（由雙肩與雙腰圍成的矩形內）的膚色像素比例（YCbCr 膚色模型，抗燈光偏色）
-  function computeTorsoSkinRatio(ctx, w, h, m) {
-    if (!m || !m.ls || !m.rs) return 0;
-    const minX = Math.max(0, Math.floor(Math.min(m.ls.x, m.rs.x) * w));
-    const maxX = Math.min(w - 1, Math.ceil(Math.max(m.ls.x, m.rs.x) * w));
-    const topY = Math.max(0, Math.floor((m.shoulderMidY + m.shoulderWidth * 0.15) * h));
-    const bottomY = Math.min(h - 1, Math.ceil((m.shoulderMidY + m.shoulderWidth * 1.15) * h));
-
-    const boxW = maxX - minX;
-    const boxH = bottomY - topY;
-    if (boxW < 16 || boxH < 16) return 0;
-
-    try {
-      const imgData = ctx.getImageData(minX, topY, boxW, boxH).data;
-      let skinPixels = 0;
-      let totalSampled = 0;
-
-      // 每隔 2 個像素取樣以保持極高幀率
-      for (let i = 0; i < imgData.length; i += 8) {
-        const r = imgData[i];
-        const g = imgData[i + 1];
-        const b = imgData[i + 2];
-        totalSampled++;
-
-        // 轉換至 YCbCr 色彩空間進行膚色判斷
-        const y  =  0.299 * r + 0.587 * g + 0.114 * b;
-        const cb = 128 - 0.168736 * r - 0.331264 * g + 0.5 * b;
-        const cr = 128 + 0.5 * r - 0.418688 * g - 0.081312 * b;
-
-        if (y > 45 && cr >= 133 && cr <= 178 && cb >= 77 && cb <= 127 && r > g && r > b) {
-          skinPixels++;
-        }
-      }
-      return totalSampled > 0 ? (skinPixels / totalSampled) : 0;
-    } catch (_) {
-      return 0;
-    }
-  }
-
-  function getBodyMetrics(lm) {
-    const nose = lm[0], le = lm[7], re = lm[8];
-    const ls = lm[11], rs = lm[12];
-    const lelb = lm[13], relb = lm[14];
-    const lw = lm[15], rw = lm[16];
-    const lh = lm[23], rh = lm[24];
-    const lk = lm[25], rk = lm[26];
-
-    if (!ls || !rs || ls.visibility < 0.45 || rs.visibility < 0.45) return null;
-
-    const shoulderWidth = Math.hypot(ls.x - rs.x, ls.y - rs.y);
-    const shoulderMidX = (ls.x + rs.x) / 2;
-    const shoulderMidY = (ls.y + rs.y) / 2;
-    const headY = nose ? nose.y : (shoulderMidY - shoulderWidth * 0.6);
-
-    return {
-      nose, le, re, ls, rs, lelb, relb, lw, rw, lh, rh, lk, rk,
-      shoulderWidth, shoulderMidX, shoulderMidY, headY
-    };
-  }
-
-  function checkCrossArmsSurrender(m) {
-    if (!m || !m.lw || !m.rw || !m.lelb || !m.relb) return false;
-    if (m.lw.visibility < 0.45 || m.rw.visibility < 0.45) return false;
-
-    const inChestZone = (m.lw.y > m.headY) && (m.rw.y > m.headY) &&
-                        (m.lw.y < m.shoulderMidY + m.shoulderWidth * 1.4) &&
-                        (m.rw.y < m.shoulderMidY + m.shoulderWidth * 1.4);
-
-    const wristsClose = Math.hypot(m.lw.x - m.rw.x, m.lw.y - m.rw.y) < m.shoulderWidth * 0.75;
-    const elbowsWiderThanWrists = Math.abs(m.lelb.x - m.relb.x) > Math.abs(m.lw.x - m.rw.x) * 1.25;
-
-    return inChestZone && wristsClose && elbowsWiderThanWrists;
-  }
-
-  const POSE_LIBRARY = {
-    undress_top: {
-      name: '👕 把上衣脫掉！',
-      desc: '快把上衣脫掉露出上半身，站在鏡頭前別遮擋！',
-      check: (m) => {
-        // 胸腹區域膚色像素占比 >= 46% 視為已脫去上衣
-        return currentTorsoSkinRatio >= 0.46;
-      }
-    },
-    hands_up: {
-      name: '🙌 雙手舉高投降',
-      desc: '雙手手腕舉高超過頭頂，手臂伸直！',
-      check: (m) => {
-        if (!m || !m.lw || !m.rw || m.lw.visibility < 0.45 || m.rw.visibility < 0.45) return false;
-        const aboveHead = m.lw.y < (m.headY - m.shoulderWidth * 0.15) && m.rw.y < (m.headY - m.shoulderWidth * 0.15);
-        const handsApart = Math.abs(m.lw.x - m.rw.x) > m.shoulderWidth * 0.55;
-        return aboveHead && handsApart;
-      }
-    },
-    hands_behind_head: {
-      name: '🙆 雙手抱頭屈服',
-      desc: '雙手放到耳朵／頭兩側，手肘向外張開！',
-      check: (m) => {
-        if (!m || !m.lw || !m.rw || !m.lelb || !m.relb) return false;
-        if (m.lw.visibility < 0.4 || m.rw.visibility < 0.4) return false;
-        const headLevelY = (m.lw.y < m.shoulderMidY) && (m.rw.y < m.shoulderMidY) &&
-                           (m.lw.y > m.headY - m.shoulderWidth * 0.45) && (m.rw.y > m.headY - m.shoulderWidth * 0.45);
-        const nearHeadX = Math.abs(m.lw.x - m.shoulderMidX) < m.shoulderWidth * 0.85 &&
-                          Math.abs(m.rw.x - m.shoulderMidX) < m.shoulderWidth * 0.85;
-        const elbowsWide = Math.abs(m.lelb.x - m.relb.x) > m.shoulderWidth * 1.15;
-        return headLevelY && nearHeadX && elbowsWide;
-      }
-    },
-    t_pose: {
-      name: '✝️ 雙手水平張開',
-      desc: '雙臂向左右兩側完全伸直平舉（呈 T 字型）！',
-      check: (m) => {
-        if (!m || !m.lw || !m.rw || m.lw.visibility < 0.45 || m.rw.visibility < 0.45) return false;
-        const levelY = Math.abs(m.lw.y - m.ls.y) < m.shoulderWidth * 0.45 &&
-                       Math.abs(m.rw.y - m.rs.y) < m.shoulderWidth * 0.45;
-        const wideX = Math.abs(m.lw.x - m.rw.x) > m.shoulderWidth * 2.0;
-        return levelY && wideX;
-      }
-    },
-    squat: {
-      name: '🏋️ 深蹲撐住不准站',
-      desc: '退後讓大腿與膝蓋入鏡，雙腳張開半蹲壓低臀部！',
-      check: (m) => {
-        if (!m || !m.lh || !m.rh || !m.lk || !m.rk) return false;
-        if (m.lk.visibility < 0.4 || m.rk.visibility < 0.4) return false;
-        const hipY = (m.lh.y + m.rh.y) / 2;
-        const kneeY = (m.lk.y + m.rk.y) / 2;
-        return (kneeY - hipY) < m.shoulderWidth * 0.65;
-      }
-    }
-  };
-
-  let poseState = {
-    ruleMode: 'reward',
-    targetKey: 'hands_up',
-    isMatchedNow: false,
-    isCrossArmedNow: false,
-    crossArmHoldSec: 0,
-    phase: 'idle',
-    holdProgress: 0,
-    undressElapsedSec: 0,
-    rewardSecLeft: 0,
-    punishSecLeft: 0,
-    punishBreakSec: 0,
-    rewardIntensity: 14,
-    punishIntensity: 16
-  };
-
-  function stopPoseSession() {
-    poseSessionToken++;
-    clearInterval(poseLoopTimer);
-    poseLoopTimer = null;
-    poseState.phase = 'idle';
-    poseState.holdProgress = 0;
-    poseState.undressElapsedSec = 0;
-    poseState.crossArmHoldSec = 0;
-    poseState.isMatchedNow = false;
-    poseState.isCrossArmedNow = false;
-
-    const hud = document.getElementById('pose-hud');
-    if (hud) hud.classList.remove('matched', 'punishing', 'surrendered');
-    const prog = document.getElementById('pose-progress');
-    if (prog) prog.style.width = '0%';
-  }
-
-  function switchAppMode(mode) {
-    currentAppMode = mode;
-    document.getElementById('tab-chat').classList.toggle('active', mode === 'chat');
-    document.getElementById('tab-pose').classList.toggle('active', mode === 'pose');
-    document.getElementById('chat-view').classList.toggle('active', mode === 'chat');
-    document.getElementById('pose-view').classList.toggle('active', mode === 'pose');
-
-    if (mode === 'pose') {
-      initFrontCameraPose();
+    if (mode === 'countdown_10') {
+      logSys('⏳ 5 秒後啟動十秒倒數挑戰...');
+      clearTimeout(cdDelayTimer);
+      cdDelayTimer = setTimeout(() => {
+        startCountdownModal(parsed.abort_at || 0, parsed.abort_text || '停下！沒有本女王的允許，誰准你射了？');
+      }, 5000);
     } else {
-      stopPoseSession();
-      window.speechSynthesis && window.speechSynthesis.cancel();
-      sendMotorSpeed(0);
-      document.getElementById('ui-mode').innerText = '待機';
-      document.getElementById('pose-target-name').innerText = '準備開始考驗';
-      document.getElementById('pose-sub-text').innerText = '建議退後約 1.5~2 公尺，讓腰部以上完整入鏡';
-      stopFrontCamera();
+      setDeviceMode(mode, Number(parsed.intensity || 0));
     }
+  } catch (err) {
+    logSys('⚠️ AI 錯誤：' + err.message);
+  }
+}
+
+function quickEdgeBrake(text) {
+  setDeviceMode('stop', 0);
+  sendMessage(text);
+}
+
+function appendUserMsg(text) {
+  const box = document.getElementById('chat-box');
+  const row = document.createElement('div');
+  row.className = 'msg-row user';
+  row.innerHTML = `<div class="bubble">${text}</div>`;
+  box.appendChild(row);
+  box.scrollTop = box.scrollHeight;
+}
+
+function appendQueenMsg(dialogue, mode, intensity) {
+  const box = document.getElementById('chat-box');
+  const row = document.createElement('div');
+  row.className = 'msg-row ai';
+  const avatarSrc = AVATAR_MAP[mode] || 'queen.jpg';
+  const modeZh = MODE_NAMES[mode] || mode;
+  row.innerHTML = `
+    <img class="avatar" src="${avatarSrc}" onerror="this.src='queen.jpg'; this.onerror=null;" />
+    <div class="bubble">${dialogue}<span class="cmd-tag">[指令: ${modeZh} | 強度: ${intensity}/20]</span></div>
+  `;
+  box.appendChild(row);
+  box.scrollTop = box.scrollHeight;
+}
+
+function logSys(text) {
+  const box = document.getElementById('chat-box');
+  const div = document.createElement('div');
+  div.className = 'msg-sys';
+  div.innerText = text;
+  box.appendChild(div);
+  box.scrollTop = box.scrollHeight;
+}
+
+// ================= 4. 十秒倒數計時彈窗（5秒延遲後啟動） =================
+let cdDelayTimer = null;
+let cdInterval = null;
+
+function startCountdownModal(abortAt, abortText) {
+  const modal = document.getElementById('countdown-modal');
+  const video = document.getElementById('cd-video');
+  const numEl = document.getElementById('cd-number');
+
+  modal.style.display = 'flex';
+  numEl.classList.remove('shake-zero');
+  let sec = 10;
+  numEl.innerText = sec;
+
+  if (video) {
+    video.style.display = 'block';
+    video.currentTime = 0;
+    video.muted = false;
+    video.volume = 1.0;
+    video.play().catch(() => {
+      video.muted = true;
+      video.play().catch(() => { video.style.display = 'none'; });
+    });
   }
 
-  function togglePoseRuleMode() {
-    poseState.ruleMode = poseState.ruleMode === 'reward' ? 'punish' : 'reward';
-    const btn = document.getElementById('btn-pose-rule');
-    const badge = document.getElementById('pose-rule-badge');
-    if (poseState.ruleMode === 'reward') {
-      btn.innerText = '🔄 切換：獎勵制';
-      badge.innerText = '獎勵制：擺對姿勢維持 3 秒 → 獎勵抽插 10 秒';
+  document.getElementById('ui-mode').innerText = '十秒倒數';
+  sendMotorSpeed(4);
+
+  clearInterval(cdInterval);
+  cdInterval = setInterval(() => {
+    sec--;
+    if (abortAt > 0 && sec === abortAt) {
+      clearInterval(cdInterval);
+      if (video) video.pause();
+      modal.style.display = 'none';
+      setDeviceMode('stop', 0);
+      appendQueenMsg(abortText, 'stop', 0);
+      speakQueen(abortText);
+      return;
+    }
+
+    if (sec > 0) {
+      numEl.innerText = sec;
+      const speed = Math.round(4 + ((10 - sec) / 10) * 16);
+      sendMotorSpeed(speed);
     } else {
-      btn.innerText = '🔄 切換：懲罰制';
-      badge.innerText = '懲罰制：維持姿勢 15 秒，一偷懶走樣立刻抽插懲罰！';
+      numEl.innerText = '0!';
+      numEl.classList.add('shake-zero');
+      sendMotorSpeed(20);
+      clearInterval(cdInterval);
+      setTimeout(() => {
+        if (video) video.pause();
+        modal.style.display = 'none';
+        setDeviceMode('stop', 0);
+        logSys('倒數結束，強度已自動歸零。');
+      }, 3000);
     }
+  }, 1000);
+}
+
+function abortCountdownByEdge() {
+  clearInterval(cdInterval);
+  const video = document.getElementById('cd-video');
+  if (video) video.pause();
+  document.getElementById('countdown-modal').style.display = 'none';
+  quickEdgeBrake('女王！倒數還沒結束我快忍不住射出來了！');
+}
+
+// ================= 5. 鏡頭考驗（姿勢考驗模式 + 訓練模式） =================
+let activeMainTab = 'chat';
+let activeCameraSubmode = 'pose'; // 'pose' | 'train' | 'none'
+let ruleMode = 'reward'; // 'reward' | 'punish'
+let hasUndressed = false;
+let cameraInstance = null;
+let poseDetector = null;
+let sessionToken = 0;
+
+// 姿勢考驗任務清單
+const POSE_TASKS = [
+  { id: 'hands_up', name: '🙌 雙手舉高投降', hint: '請將雙手手腕高舉過頭頂並維持穩定' },
+  { id: 'hands_head', name: '🙆 雙手抱頭屈服', hint: '雙手放於耳朵兩側或後腦勺，手肘張開' },
+  { id: 't_pose', name: '✝️ 雙手水平張開', hint: '雙臂向左右兩側平舉伸直與肩同高' },
+  { id: 'squat_ya', name: '✌️ 深蹲開腿比YA', hint: '雙腳張開深蹲壓低重心，同時雙手高舉比YA' }
+];
+
+// 訓練模式動作清單（建議轉側面偵測）
+const TRAIN_TASKS = [
+  { id: 'pushup', name: '💪 扶立挺身（請轉側面）', hint: '請側身面對鏡頭，手肘彎曲下壓再推直算 1 下' },
+  { id: 'squat_rep', name: '🏋️ 起立蹲下（請轉側面）', hint: '請側身面對鏡頭，臀部下蹲再完全站直算 1 下' }
+];
+
+let currentTask = null;
+let taskRunning = false;
+let holdAccumMs = 0;
+let lastFrameTime = 0;
+let rewardOrCycleTimer = null;
+let xCrossHoldMs = 0;
+
+// 訓練模式計次狀態
+let trainTargetReps = 0;
+let trainCurrentReps = 0;
+let trainPhase = 'up'; // 'up' -> 'down' -> 'up' 計 1 下
+let trainTimeLeft = 0;
+let trainCountdownTimer = null;
+
+function switchMainTab(tab) {
+  activeMainTab = tab;
+  document.getElementById('tab-chat').classList.toggle('active', tab === 'chat');
+  document.getElementById('tab-camera').classList.toggle('active', tab === 'camera');
+  document.getElementById('chat-view').style.display = tab === 'chat' ? 'flex' : 'none';
+  document.getElementById('camera-view').style.display = tab === 'camera' ? 'flex' : 'none';
+
+  if (tab === 'chat') {
+    sessionToken++;
+    stopCameraLoop();
+    setDeviceMode('stop', 0);
+  } else {
+    syncSubmodeUI();
+    startCameraLoop();
+  }
+}
+
+// 處理「姿勢考驗模式」與「訓練模式」打勾切換
+function onSubmodeCheckChange(clickedType) {
+  const poseChk = document.getElementById('chk-mode-pose');
+  const trainChk = document.getElementById('chk-mode-train');
+
+  // 切換時先中斷當前正在跑的任務與馬達
+  resetActiveTaskState();
+
+  if (clickedType === 'pose' && poseChk.checked) {
+    trainChk.checked = false;
+    activeCameraSubmode = 'pose';
+  } else if (clickedType === 'train' && trainChk.checked) {
+    poseChk.checked = false;
+    activeCameraSubmode = 'train';
+  } else if (!poseChk.checked && !trainChk.checked) {
+    activeCameraSubmode = 'none';
+  } else if (poseChk.checked) {
+    activeCameraSubmode = 'pose';
+  } else if (trainChk.checked) {
+    activeCameraSubmode = 'train';
   }
 
-  async function initFrontCameraPose() {
-    if (isCameraRunning) return;
-    const videoEl = document.getElementById('pose-video');
-    const canvasEl = document.getElementById('pose-canvas');
-    const ctx = canvasEl.getContext('2d', { willReadFrequently: true });
+  syncSubmodeUI();
+}
 
-    document.getElementById('pose-sub-text').innerText = '正在啟動前置鏡頭與骨架辨識模型...';
+function syncSubmodeUI() {
+  const modeLabel = activeCameraSubmode === 'pose' ? '姿勢考驗' : (activeCameraSubmode === 'train' ? '訓練模式' : '未啟用模式');
+  const ruleLabel = ruleMode === 'reward' ? '獎勵制' : '懲罰制';
+  document.getElementById('hud-mode-badge').innerText = `${modeLabel}｜${ruleLabel}`;
+  document.getElementById('btn-pose-rule').innerText = `🔄 ${ruleLabel}`;
 
-    try {
-      if (!poseDetector) {
-        poseDetector = new Pose({
-          locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`
-        });
-        poseDetector.setOptions({
-  modelComplexity: 1,        // 從 0 改為 1，大幅減少關節點飄移
-  smoothLandmarks: true,
-  enableSegmentation: false,
-  minDetectionConfidence: 0.65, // 提高偵測門檻，避免背景雜物被誤認成手臂
-  minTrackingConfidence: 0.65
-});
-        poseDetector.onResults((results) => {
-          if (currentAppMode !== 'pose') return;
-          canvasEl.width = results.image.width;
-          canvasEl.height = results.image.height;
-          ctx.save();
-          ctx.clearRect(0, 0, canvasEl.width, canvasEl.height);
-          ctx.drawImage(results.image, 0, 0, canvasEl.width, canvasEl.height);
+  // 脫衣選項僅在姿勢考驗模式顯示
+  document.getElementById('undress-option-row').style.display = activeCameraSubmode === 'pose' ? 'flex' : 'none';
 
-          const distTip = document.getElementById('pose-distance-tip');
-          const skinDebug = document.getElementById('skin-debug-tag');
+  if (activeCameraSubmode === 'none') {
+    document.getElementById('pose-target-name').innerText = '請先勾選上方任一模式';
+    document.getElementById('pose-sub-text').innerText = '勾選「姿勢考驗模式」或「訓練模式」後按開始';
+    document.getElementById('hud-timer-badge').innerText = '未啟用';
+  } else {
+    document.getElementById('pose-target-name').innerText = '請按「▶️ 開始 / 換題」';
+    document.getElementById('pose-sub-text').innerText = activeCameraSubmode === 'train'
+      ? '隨機 5～15 下｜請轉側面面對鏡頭以利精準偵測'
+      : '退後至半身/全身入鏡，雙手比 X 維持 1 秒可煞車';
+    document.getElementById('hud-timer-badge').innerText = '準備就緒';
+  }
+}
 
-          if (results.poseLandmarks) {
-            const metrics = getBodyMetrics(results.poseLandmarks);
+function toggleRuleMode() {
+  ruleMode = ruleMode === 'reward' ? 'punish' : 'reward';
+  resetActiveTaskState();
+  syncSubmodeUI();
+  speakQueen(ruleMode === 'reward' ? '切換為獎勵制，乖乖完成就有獎賞。' : '切換為懲罰制，做不到就等著被折磨吧。');
+}
 
-            if (!metrics) {
-              poseState.isMatchedNow = false;
-              poseState.isCrossArmedNow = false;
-              distTip.innerText = '⚠️ 偵測不到完整肩膀，請往後退一步讓上半身入鏡！';
-              distTip.style.color = '#fbbf24';
-            } else {
-              // 在畫上骨架線之前，先取樣胸腹區域真實膚色比例
-              currentTorsoSkinRatio = computeTorsoSkinRatio(ctx, canvasEl.width, canvasEl.height, metrics);
-              if (skinDebug) {
-                skinDebug.innerText = `裸露度: ${Math.round(currentTorsoSkinRatio * 100)}%`;
-                skinDebug.style.color = currentTorsoSkinRatio >= 0.46 ? '#34d399' : '#9ca3af';
-              }
+function resetUndressFlag() {
+  hasUndressed = !document.getElementById('require-undress-chk').checked;
+}
 
-              if (metrics.shoulderWidth > 0.62) {
-                distTip.innerText = '📏 距離太近了！請再往後退半步，避免舉手超出畫面';
-                distTip.style.color = '#fbbf24';
-              } else if (metrics.shoulderWidth < 0.14) {
-                distTip.innerText = '📏 距離太遠了！請稍微往前靠近一點';
-                distTip.style.color = '#fbbf24';
-              } else {
-                distTip.innerText = '✅ 站位距離完美！雙手胸前交叉比 X (1秒) = 遠距離快射了煞車';
-                distTip.style.color = '#34d399';
-              }
+function resetActiveTaskState() {
+  sessionToken++;
+  taskRunning = false;
+  currentTask = null;
+  holdAccumMs = 0;
+  xCrossHoldMs = 0;
+  clearTimeout(rewardOrCycleTimer);
+  clearInterval(trainCountdownTimer);
+  updateProgressBar(0, false);
+  setDeviceMode('stop', 0);
+}
 
-              const isCross = checkCrossArmsSurrender(metrics);
-              poseState.isCrossArmedNow = isCross;
-
-              const poseObj = POSE_LIBRARY[poseState.targetKey];
-              const matched = poseObj ? poseObj.check(metrics) : false;
-              poseState.isMatchedNow = matched;
-
-              const lineColor = isCross ? '#f59e0b' : (matched ? '#10b981' : '#e11d48');
-              drawConnectors(ctx, results.poseLandmarks, POSE_CONNECTIONS, { color: lineColor, lineWidth: 4 });
-              drawLandmarks(ctx, results.poseLandmarks, { color: '#ffffff', lineWidth: 1, radius: 3 });
-            }
-          } else {
-            poseState.isMatchedNow = false;
-            poseState.isCrossArmedNow = false;
-            distTip.innerText = '⚠️ 畫面中找不到人，請站到前置鏡頭前';
-            distTip.style.color = '#f87171';
-          }
-          ctx.restore();
-        });
-      }
-
-      cameraInstance = new Camera(videoEl, {
-        onFrame: async () => {
-          if (currentAppMode === 'pose' && poseDetector) {
-            await poseDetector.send({ image: videoEl });
-          }
-        },
-        facingMode: 'user',
-        width: 480,
-        height: 640
-      });
-
-      await cameraInstance.start();
-      isCameraRunning = true;
-      document.getElementById('pose-sub-text').innerText = '鏡頭已就緒！按「▶️ 開始 / 換題」讓女王出題';
-    } catch (err) {
-      document.getElementById('pose-sub-text').innerText = '⚠️ 無法開啟前置鏡頭：' + err.message;
-    }
+function handleStartOrNextTask() {
+  if (activeCameraSubmode === 'none') {
+    speakQueen('請先勾選姿勢考驗模式或訓練模式。');
+    return;
   }
 
-  function stopFrontCamera() {
-    if (cameraInstance) {
-      cameraInstance.stop();
-      isCameraRunning = false;
-    }
-  }
+  resetActiveTaskState();
+  const myToken = sessionToken;
+  taskRunning = true;
 
-  // 點擊「▶️ 開始 / 換題」時的入口：若勾選「開場先要求脫掉上衣」且尚未脫衣，先進入脫衣檢查關卡
-  function handleStartOrNextPose() {
-    const requireUndress = document.getElementById('require-undress-chk').checked;
-    if (requireUndress && !hasCompletedUndress) {
-      startUndressStage();
+  if (activeCameraSubmode === 'pose') {
+    const needUndress = document.getElementById('require-undress-chk').checked && !hasUndressed;
+    if (needUndress) {
+      currentTask = { id: 'undress', name: '👕 脫掉上衣', hint: '請面對鏡頭脫掉上衣（胸腹裸露度達 48% 維持 2 秒）' };
+      document.getElementById('pose-target-name').innerText = currentTask.name;
+      document.getElementById('pose-sub-text').innerText = currentTask.hint;
+      document.getElementById('hud-timer-badge').innerText = '脫衣驗證中';
+      speakQueen('先把你的上衣脫掉給本女王看清楚！');
+      return;
+    }
+
+    // 隨機抽取姿勢考驗動作
+    const task = POSE_TASKS[Math.floor(Math.random() * POSE_TASKS.length)];
+    currentTask = task;
+    holdAccumMs = 0;
+    document.getElementById('pose-target-name').innerText = task.name;
+    document.getElementById('pose-sub-text').innerText = task.hint;
+
+    if (ruleMode === 'reward') {
+      document.getElementById('hud-timer-badge').innerText = '擺對維持 3 秒';
+      speakQueen(`現在給我做出${task.name.replace(/^[^\s]+\s/, '')}，維持住！`);
     } else {
-      requestNextPoseTask();
-    }
-  }
-
-  // 第一關：強制要求脫掉上衣（透過胸腹膚色比例即時判讀）
-  function startUndressStage() {
-    if (currentAppMode !== 'pose') return;
-    stopPoseSession();
-    sendMotorSpeed(0);
-
-    poseState.targetKey = 'undress_top';
-    poseState.phase = 'undressing';
-    poseState.holdProgress = 0;
-    poseState.undressElapsedSec = 0;
-
-    const queenLine = '在開始姿勢考驗之前，先把你身上的衣服給我脫掉！別磨磨蹭蹭的，讓本女王看清楚！';
-    document.getElementById('pose-target-name').innerText = '👕 第一關：脫掉上衣！';
-    document.getElementById('pose-queen-text').innerText = queenLine;
-    speakQueenText(queenLine);
-
-    const hud = document.getElementById('pose-hud');
-    const subText = document.getElementById('pose-sub-text');
-    const progBar = document.getElementById('pose-progress');
-    hud.classList.remove('matched', 'punishing', 'surrendered');
-
-    poseLoopTimer = setInterval(() => {
-      if (currentAppMode !== 'pose') { stopPoseSession(); return; }
-
-      poseState.undressElapsedSec += 0.2;
-      const pct = Math.round(currentTorsoSkinRatio * 100);
-
-      if (poseState.isMatchedNow) {
-        // 已偵測到脫掉上衣（裸露度 >= 46%）
-        sendMotorSpeed(0);
-        poseState.holdProgress += 0.2;
-        hud.classList.add('matched');
-        hud.classList.remove('punishing');
-        document.getElementById('ui-mode').innerText = '脫衣確認中';
-        subText.innerText = `✅ 偵測到上半身已裸露 (${pct}%)！確認中：${poseState.holdProgress.toFixed(1)} / 2.0 秒`;
-        progBar.style.background = '#10b981';
-        progBar.style.width = `${Math.min(100, (poseState.holdProgress / 2.0) * 100)}%`;
-
-        if (poseState.holdProgress >= 2.0) {
-          clearInterval(poseLoopTimer);
-          hasCompletedUndress = true;
-          sendMotorSpeed(0);
-          requestNextPoseTask('[系統自動回報：使用者已經乖乖把上衣脫掉、光著上半身站在鏡頭前了！請用高傲或嘲諷的語氣評價他的身材，並立刻指派第一個姿勢考驗！]');
-        }
-      } else {
-        poseState.holdProgress = Math.max(0, poseState.holdProgress - 0.1);
-        hud.classList.remove('matched');
-        progBar.style.width = `${(poseState.holdProgress / 2.0) * 100}%`;
-
-        // 若超過 12 秒還沒脫完，啟動低頻催促脈衝
-        if (poseState.undressElapsedSec > 12) {
-          hud.classList.add('punishing');
-          const pulseOn = (Math.floor(poseState.undressElapsedSec * 2) % 2) === 0;
-          sendMotorSpeed(pulseOn ? 10 : 0);
-          document.getElementById('ui-mode').innerText = '催促脫衣懲罰';
-          subText.innerText = `⚡ 太慢了！脈衝催促中（目前裸露度 ${pct}% / 需達 46%）`;
-          progBar.style.background = '#e11d48';
+      // 懲罰制：給你 3 秒準備，之後 15 秒沒擺好就抽插懲罰
+      let prep = 3;
+      document.getElementById('hud-timer-badge').innerText = `準備 ${prep} 秒`;
+      speakQueen(`三秒內給我擺出${task.name.replace(/^[^\s]+\s/, '')}，敢偷懶就懲罰你！`);
+      rewardOrCycleTimer = setInterval(() => {
+        if (myToken !== sessionToken) return clearInterval(rewardOrCycleTimer);
+        prep--;
+        if (prep > 0) {
+          document.getElementById('hud-timer-badge').innerText = `準備 ${prep} 秒`;
         } else {
-          document.getElementById('ui-mode').innerText = '等待脫掉上衣';
-          subText.innerText = `👕 請脫掉上衣露出胸腹（目前偵測裸露度：${pct}% / 目標 46%）`;
-          progBar.style.background = '#f59e0b';
+          clearInterval(rewardOrCycleTimer);
+          startPosePunishWindow(myToken);
         }
-      }
-    }, 200);
+      }, 1000);
+    }
+  } else if (activeCameraSubmode === 'train') {
+    // 訓練模式：隨機 5~15 下，扶立挺身或起立蹲下
+    const task = TRAIN_TASKS[Math.floor(Math.random() * TRAIN_TASKS.length)];
+    currentTask = task;
+    trainTargetReps = Math.floor(Math.random() * 11) + 5; // 5 ~ 15 下
+    trainCurrentReps = 0;
+    trainPhase = 'up';
+
+    document.getElementById('pose-target-name').innerText = `${task.name}：0 / ${trainTargetReps} 下`;
+    document.getElementById('pose-sub-text').innerText = task.hint;
+    updateProgressBar(0, false);
+
+    if (ruleMode === 'reward') {
+      // 獎勵制：不限秒數，做完指定次數即給獎勵
+      document.getElementById('hud-timer-badge').innerText = `目標 ${trainTargetReps} 下（無時間限制）`;
+      speakQueen(`訓練開始！轉側面給我做滿 ${trainTargetReps} 下${task.id === 'pushup' ? '扶立挺身' : '起立蹲下'}，做完就賞賜你！`);
+    } else {
+      // 懲罰制：5 下給 10 秒，每多 1 下多給 3 秒
+      trainTimeLeft = 10 + (trainTargetReps - 5) * 3;
+      document.getElementById('hud-timer-badge').innerText = `⏳ 剩餘 ${trainTimeLeft} 秒`;
+      speakQueen(`限時 ${trainTimeLeft} 秒！轉側面給我做完 ${trainTargetReps} 下${task.id === 'pushup' ? '扶立挺身' : '起立蹲下'}，時間到沒做完就等著受罰吧！`);
+
+      trainCountdownTimer = setInterval(() => {
+        if (myToken !== sessionToken || !taskRunning) return clearInterval(trainCountdownTimer);
+        trainTimeLeft--;
+        document.getElementById('hud-timer-badge').innerText = `⏳ 剩餘 ${trainTimeLeft} 秒`;
+        if (trainTimeLeft <= 0) {
+          clearInterval(trainCountdownTimer);
+          triggerTrainPunishment(myToken);
+        }
+      }, 1000);
+    }
+  }
+}
+
+// 姿勢考驗：懲罰制 15 秒監督視窗
+function startPosePunishWindow(myToken) {
+  let remain = 15;
+  document.getElementById('hud-timer-badge').innerText = `考驗剩餘 ${remain} 秒`;
+  rewardOrCycleTimer = setInterval(() => {
+    if (myToken !== sessionToken || !taskRunning) return clearInterval(rewardOrCycleTimer);
+    remain--;
+    document.getElementById('hud-timer-badge').innerText = `考驗剩餘 ${remain} 秒`;
+    if (remain <= 0) {
+      clearInterval(rewardOrCycleTimer);
+      setDeviceMode('stop', 0);
+      speakQueen('時間到，表現不錯，準備下一個動作！');
+      setTimeout(() => { if (myToken === sessionToken) handleStartOrNextTask(); }, 2000);
+    }
+  }, 1000);
+}
+
+// 訓練模式：懲罰制時間到未完成
+function triggerTrainPunishment(myToken) {
+  taskRunning = false;
+  setDeviceMode('train_punish', 15);
+  document.getElementById('pose-target-name').innerText = `❌ 時間到！只做了 ${trainCurrentReps} / ${trainTargetReps} 下`;
+  document.getElementById('pose-sub-text').innerText = '懲罰抽插啟動 10 秒！撐住不准射！';
+  document.getElementById('hud-timer-badge').innerText = '🔥 懲罰抽插中 (10s)';
+  speakQueen(`太慢了！時間到才做了 ${trainCurrentReps} 下，給我好好承受 10 秒懲罰抽插吧！`);
+
+  rewardOrCycleTimer = setTimeout(() => {
+    if (myToken !== sessionToken) return;
+    setDeviceMode('stop', 0);
+    handleStartOrNextTask();
+  }, 10000);
+}
+
+// 訓練模式：完成指定次數（獎勵制領獎 / 懲罰制過關）
+function completeTrainReps(myToken) {
+  taskRunning = false;
+  clearInterval(trainCountdownTimer);
+  updateProgressBar(100, true);
+
+  if (ruleMode === 'reward') {
+    setDeviceMode('train_reward', 14);
+    document.getElementById('pose-sub-text').innerText = '🎉 訓練達標！享受 10 秒獎勵抽插！';
+    document.getElementById('hud-timer-badge').innerText = '🎁 獎勵抽插中 (10s)';
+    speakQueen(`不錯嘛，乖乖做完了 ${trainTargetReps} 下，這是賞給你的 10 秒獎勵抽插！`);
+    rewardOrCycleTimer = setTimeout(() => {
+      if (myToken !== sessionToken) return;
+      setDeviceMode('stop', 0);
+      handleStartOrNextTask();
+    }, 10000);
+  } else {
+    setDeviceMode('stop', 0);
+    document.getElementById('pose-sub-text').innerText = '✅ 限時內過關！免除本次懲罰，2 秒後換下一題';
+    document.getElementById('hud-timer-badge').innerText = '✅ 過關';
+    speakQueen(`算你過關，竟然在時間內做完了 ${trainTargetReps} 下，準備下一輪！`);
+    rewardOrCycleTimer = setTimeout(() => {
+      if (myToken !== sessionToken) return;
+      handleStartOrNextTask();
+    }, 2200);
+  }
+}
+
+function triggerCameraEdgeBrake() {
+  resetActiveTaskState();
+  setDeviceMode('stop', 0);
+  document.getElementById('pose-target-name').innerText = '🥵 已緊急煞車歸零';
+  document.getElementById('pose-sub-text').innerText = '已通報女王你快忍不住了，按「▶️ 開始 / 換題」繼續';
+  speakQueen('哼，才這點程度就快忍不住了嗎？本女王先幫你停下來，給我好好忍著！');
+}
+
+function updateProgressBar(pct, matched) {
+  const bar = document.getElementById('pose-progress');
+  bar.style.width = `${Math.max(0, Math.min(100, pct))}%`;
+  bar.classList.toggle('matched', matched);
+}
+
+// ================= 6. MediaPipe Pose 鏡頭啟動與即時骨架/動作演算法 =================
+async function startCameraLoop() {
+  const videoEl = document.getElementById('pose-video');
+  const canvasEl = document.getElementById('pose-canvas');
+  const ctx = canvasEl.getContext('2d');
+
+  if (!poseDetector) {
+    poseDetector = new Pose({
+      locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`
+    });
+    poseDetector.setOptions({
+      modelComplexity: 1,
+      smoothLandmarks: true,
+      minDetectionConfidence: 0.5,
+      minTrackingConfidence: 0.5
+    });
+    poseDetector.onResults((results) => onPoseResults(results, videoEl, canvasEl, ctx));
   }
 
-  async function requestNextPoseTask(autoFeedbackText = null) {
-    if (currentAppMode !== 'pose') return;
-    stopPoseSession();
-    const myToken = poseSessionToken;
+  if (!cameraInstance) {
+    cameraInstance = new Camera(videoEl, {
+      onFrame: async () => {
+        if (activeMainTab === 'camera' && poseDetector) {
+          await poseDetector.send({ image: videoEl });
+        }
+      },
+      width: 640,
+      height: 480
+    });
+  }
+  cameraInstance.start();
+}
 
-    sendMotorSpeed(0);
-    poseState.phase = 'loading';
-    document.getElementById('pose-target-name').innerText = '女王思考指令中...';
-    document.getElementById('pose-sub-text').innerText = '請稍候';
+function stopCameraLoop() {
+  if (cameraInstance) {
+    try { cameraInstance.stop(); } catch (_) {}
+    cameraInstance = null;
+  }
+}
 
-    // 排除脫衣關卡，從四個正式動作中抽選
-    const actionKeys = ['hands_up', 'hands_behind_head', 't_pose', 'squat'];
-    const fallbackKey = actionKeys[Math.floor(Math.random() * actionKeys.length)];
+// 計算三點夾角（度數 0~180）
+function calcAngle(a, b, c) {
+  const rad = Math.atan2(c.y - b.y, c.x - b.x) - Math.atan2(a.y - b.y, a.x - b.x);
+  let deg = Math.abs((rad * 180) / Math.PI);
+  if (deg > 180) deg = 360 - deg;
+  return deg;
+}
 
-    const url = document.getElementById('api-url').value.trim();
-    const key = document.getElementById('api-key').value.trim();
-    const model = document.getElementById('api-model').value.trim();
+// 計算胸腹部膚色比例（脫衣偵測）
+function calcTorsoSkinRatio(videoEl, lm) {
+  try {
+    const off = document.createElement('canvas');
+    off.width = 160;
+    off.height = 120;
+    const octx = off.getContext('2d');
+    octx.drawImage(videoEl, 0, 0, 160, 120);
 
-    const userReport = autoFeedbackText || '女王，我已經站在鏡頭前準備好了，請命令我做一個姿勢！';
-    const poseInstruction = `[系統目前處於前置鏡頭姿勢考驗模式，規則為「${poseState.ruleMode === 'reward' ? '達成獎勵抽插10秒' : '未達成持續懲罰抽插'}」。請從以下四個姿勢代碼中選一個考驗他：hands_up（雙手舉高投降）、hands_behind_head（雙手抱頭屈服）、t_pose（雙手水平張開）、squat（深蹲撐住）。請只輸出合法 JSON：{"pose_key": "上述四選一", "intensity": 10到20的整數, "dialogue": "用傲慢命令的語氣叫他擺出該姿勢的繁體中文台詞"}]`;
+    const xs = [lm[11].x, lm[12].x, lm[23].x, lm[24].x].map(v => v * 160);
+    const ys = [lm[11].y, lm[12].y, lm[23].y, lm[24].y].map(v => v * 120);
+    const minX = Math.max(0, Math.floor(Math.min(...xs)));
+    const maxX = Math.min(159, Math.ceil(Math.max(...xs)));
+    const minY = Math.max(0, Math.floor(Math.min(...ys)));
+    const maxY = Math.min(119, Math.ceil(Math.max(...ys)));
+    const w = maxX - minX;
+    const h = maxY - minY;
+    if (w < 8 || h < 8) return 0;
 
-    const tempMessages = [
-      ...chatHistory,
-      { role: 'user', content: `${userReport}\n${poseInstruction}` }
-    ];
-
-    let chosenKey = fallbackKey;
-    let chosenIntensity = 15;
-    let queenLine = `現在立刻給我擺出「${POSE_LIBRARY[chosenKey].name}」，不准偷懶！`;
-
-    try {
-      if (key) {
-        const res = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
-          body: JSON.stringify({ model, messages: tempMessages, temperature: 0.85 })
-        });
-        const data = await res.json();
-        let reply = data.choices[0].message.content.trim().replace(/^```json\s*/i, '').replace(/```\s*$/i, '');
-        const parsed = JSON.parse(reply);
-        if (actionKeys.includes(parsed.pose_key)) chosenKey = parsed.pose_key;
-        chosenIntensity = Math.min(20, Math.max(8, parseInt(parsed.intensity) || 15));
-        if (parsed.dialogue) queenLine = parsed.dialogue;
+    const imgData = octx.getImageData(minX, minY, w, h).data;
+    let skin = 0;
+    const total = w * h;
+    for (let i = 0; i < imgData.length; i += 4) {
+      const r = imgData[i], g = imgData[i + 1], b = imgData[i + 2];
+      if (r > 85 && g > 35 && b > 20 && r > g && r > b && Math.abs(r - g) > 12) {
+        skin++;
       }
-    } catch (_) {}
+    }
+    return Math.round((skin / total) * 100);
+  } catch (_) {
+    return 0;
+  }
+}
 
-    if (currentAppMode !== 'pose' || myToken !== poseSessionToken) return;
+function onPoseResults(results, videoEl, canvasEl, ctx) {
+  const now = performance.now();
+  const dt = lastFrameTime ? (now - lastFrameTime) : 33;
+  lastFrameTime = now;
 
-    startPoseChallenge(chosenKey, chosenIntensity, queenLine);
+  canvasEl.width = results.image.width;
+  canvasEl.height = results.image.height;
+  ctx.save();
+  ctx.clearRect(0, 0, canvasEl.width, canvasEl.height);
+  ctx.drawImage(results.image, 0, 0, canvasEl.width, canvasEl.height);
+
+  const lm = results.poseLandmarks;
+  if (!lm) {
+    ctx.restore();
+    return;
   }
 
-  function startPoseChallenge(poseKey, intensity, queenLine) {
-    if (currentAppMode !== 'pose') return;
-    poseState.targetKey = poseKey;
-    poseState.rewardIntensity = intensity;
-    poseState.punishIntensity = intensity;
-    poseState.crossArmHoldSec = 0;
+  // 1. 偵測遠距離比 X 煞車手勢（雙手手腕交叉於胸前維持 1 秒）
+  const wristCross = Math.abs(lm[15].x - lm[16].x) < 0.08 &&
+                     lm[15].y > lm[0].y && lm[15].y < lm[23].y &&
+                     lm[16].y > lm[0].y && lm[16].y < lm[23].y;
+  if (wristCross) {
+    xCrossHoldMs += dt;
+    if (xCrossHoldMs >= 1000) {
+      xCrossHoldMs = 0;
+      triggerCameraEdgeBrake();
+    }
+  } else {
+    xCrossHoldMs = Math.max(0, xCrossHoldMs - dt * 1.5);
+  }
 
-    const poseObj = POSE_LIBRARY[poseKey];
-    document.getElementById('pose-target-name').innerText = poseObj.name;
-    document.getElementById('pose-queen-text').innerText = queenLine;
-    speakQueenText(queenLine);
+  let isMatched = false;
 
-    const hud = document.getElementById('pose-hud');
-    const subText = document.getElementById('pose-sub-text');
-    const progBar = document.getElementById('pose-progress');
-    hud.classList.remove('matched', 'punishing', 'surrendered');
-
-    function checkCrossBrakeTick() {
-      if (poseState.isCrossArmedNow) {
-        poseState.crossArmHoldSec += 0.2;
-        hud.classList.add('surrendered');
-        subText.innerText = `🙅 偵測到胸前比 X 求饒手勢！維持 ${poseState.crossArmHoldSec.toFixed(1)} / 1.0 秒觸發緊急煞車...`;
-        if (poseState.crossArmHoldSec >= 1.0) {
-          triggerPoseEdgeBrake();
-          return true;
+  // 2. 執行當前子模式判定
+  if (taskRunning && currentTask) {
+    if (activeCameraSubmode === 'pose') {
+      if (currentTask.id === 'undress') {
+        const skinPct = calcTorsoSkinRatio(videoEl, lm);
+        document.getElementById('skin-debug-tag').innerText = `裸露度: ${skinPct}%`;
+        isMatched = skinPct >= 48;
+        if (isMatched) {
+          holdAccumMs += dt;
+          updateProgressBar((holdAccumMs / 2000) * 100, true);
+          if (holdAccumMs >= 2000) {
+            hasUndressed = true;
+            speakQueen('很好，脫光了才像話，現在開始正式考驗！');
+            handleStartOrNextTask();
+          }
+        } else {
+          holdAccumMs = Math.max(0, holdAccumMs - dt);
+          updateProgressBar((holdAccumMs / 2000) * 100, false);
         }
       } else {
-        poseState.crossArmHoldSec = Math.max(0, poseState.crossArmHoldSec - 0.2);
-        hud.classList.remove('surrendered');
+        isMatched = evaluateStaticPose(currentTask.id, lm);
+        if (ruleMode === 'reward') {
+          if (isMatched) {
+            holdAccumMs += dt;
+            updateProgressBar((holdAccumMs / 3000) * 100, true);
+            if (holdAccumMs >= 3000) {
+              // 達標後給予 10 秒獎勵刺激並自動換下一題
+              const myToken = sessionToken;
+              taskRunning = false;
+              setDeviceMode('pose_reward', 14);
+              document.getElementById('pose-sub-text').innerText = '🎉 姿勢達標！享受 10 秒獎勵抽插，結束後自動換題';
+              document.getElementById('hud-timer-badge').innerText = '🎁 獎勵抽插 (10s)';
+              speakQueen('做得很好，賞你 10 秒抽插，撐住不准射！');
+              rewardOrCycleTimer = setTimeout(() => {
+                if (myToken === sessionToken) {
+                  setDeviceMode('stop', 0);
+                  handleStartOrNextTask();
+                }
+              }, 10000);
+            }
+          } else {
+            holdAccumMs = Math.max(0, holdAccumMs - dt * 1.2);
+            updateProgressBar((holdAccumMs / 3000) * 100, false);
+          }
+        } else {
+          // 懲罰制：走樣就啟動抽插懲罰，擺好就停止
+          updateProgressBar(isMatched ? 100 : 0, isMatched);
+          if (isMatched) {
+            if (currentIntensity > 0) setDeviceMode('stop', 0);
+          } else {
+            if (currentIntensity === 0) setDeviceMode('pose_punish', 15);
+          }
+        }
       }
-      return false;
-    }
-
-    if (poseState.ruleMode === 'reward') {
-      poseState.phase = 'holding';
-      poseState.holdProgress = 0;
-
-      poseLoopTimer = setInterval(() => {
-        if (currentAppMode !== 'pose') { stopPoseSession(); return; }
-        if (checkCrossBrakeTick()) return;
-
-        if (poseState.phase === 'holding') {
-          document.getElementById('ui-mode').innerText = '等待擺好姿勢';
-          if (poseState.isMatchedNow) {
-            poseState.holdProgress += 0.2;
-            hud.classList.add('matched');
-            if (!poseState.isCrossArmedNow) {
-              subText.innerText = `✅ 姿勢正確！保持住：${poseState.holdProgress.toFixed(1)} / 3.0 秒`;
-            }
-            progBar.style.background = '#10b981';
-            progBar.style.width = `${Math.min(100, (poseState.holdProgress / 3) * 100)}%`;
-
-            if (poseState.holdProgress >= 3.0) {
-              poseState.phase = 'rewarding';
-              poseState.rewardSecLeft = 10;
-              sendMotorSpeed(poseState.rewardIntensity);
-              document.getElementById('ui-mode').innerText = '姿勢獎勵抽插';
-              speakQueenText('做得不錯，賞你十秒鐘！不准射出來，受不了就胸前比叉叉！');
-            }
-          } else {
-            poseState.holdProgress = Math.max(0, poseState.holdProgress - 0.1);
-            hud.classList.remove('matched');
-            if (!poseState.isCrossArmedNow) {
-              subText.innerText = `❌ ${poseObj.desc}`;
-            }
-            progBar.style.width = `${(poseState.holdProgress / 3) * 100}%`;
-          }
-        } else if (poseState.phase === 'rewarding') {
-          poseState.rewardSecLeft -= 0.2;
-          if (!poseState.isCrossArmedNow) {
-            subText.innerText = `🔥 獎勵抽插中！剩餘 ${Math.max(0, poseState.rewardSecLeft).toFixed(1)} 秒（強度 ${poseState.rewardIntensity}）`;
-          }
-          progBar.style.background = '#e11d48';
-          progBar.style.width = `${Math.max(0, (poseState.rewardSecLeft / 10) * 100)}%`;
-
-          if (poseState.rewardSecLeft <= 0) {
-            clearInterval(poseLoopTimer);
-            sendMotorSpeed(0);
-            poseState.phase = 'idle';
-            requestNextPoseTask(`[系統自動回報：使用者已乖乖完成「${poseObj.name}」，並忍住了 10 秒獎勵抽插沒有射出來。請給予評價並緊接著指派下一個新姿勢！]`);
-          }
+    } else if (activeCameraSubmode === 'train') {
+      // 訓練模式計次判定（扶立挺身 / 起立蹲下）
+      const repResult = evaluateTrainRep(currentTask.id, lm);
+      isMatched = repResult.inDownPhase;
+      if (repResult.counted) {
+        trainCurrentReps++;
+        const pct = (trainCurrentReps / trainTargetReps) * 100;
+        document.getElementById('pose-target-name').innerText = `${currentTask.name}：${trainCurrentReps} / ${trainTargetReps} 下`;
+        updateProgressBar(pct, true);
+        if (trainCurrentReps >= trainTargetReps) {
+          completeTrainReps(sessionToken);
         }
-      }, 200);
+      }
+    }
+  }
 
+  // 3. 繪製骨架連線與關節點（達標綠色、未達標紅色、比X黃色）
+  const boneColor = wristCross ? '#facc15' : (isMatched ? '#22c55e' : '#ef4444');
+  if (typeof drawConnectors !== 'undefined' && typeof POSE_CONNECTIONS !== 'undefined') {
+    drawConnectors(ctx, lm, POSE_CONNECTIONS, { color: boneColor, lineWidth: 3 });
+    drawLandmarks(ctx, lm, { color: '#ffffff', fillColor: boneColor, lineWidth: 1, radius: 3 });
+  }
+
+  ctx.restore();
+}
+
+// 靜態姿勢判定
+function evaluateStaticPose(id, lm) {
+  const nose = lm[0];
+  const lShoulder = lm[11], rShoulder = lm[12];
+  const lElbow = lm[13], rElbow = lm[14];
+  const lWrist = lm[15], rWrist = lm[16];
+  const lHip = lm[23], rHip = lm[24];
+  const lKnee = lm[25], rKnee = lm[26];
+  const lAnkle = lm[27], rAnkle = lm[28];
+
+  const shoulderW = Math.abs(lShoulder.x - rShoulder.x) || 0.2;
+
+  if (id === 'hands_up') {
+    return lWrist.y < nose.y && rWrist.y < nose.y;
+  }
+  if (id === 'hands_head') {
+    const nearHeadL = Math.hypot(lWrist.x - nose.x, lWrist.y - nose.y) < shoulderW * 0.9;
+    const nearHeadR = Math.hypot(rWrist.x - nose.x, rWrist.y - nose.y) < shoulderW * 0.9;
+    return nearHeadL && nearHeadR && lElbow.y < lShoulder.y + 0.08 && rElbow.y < rShoulder.y + 0.08;
+  }
+  if (id === 't_pose') {
+    const levelL = Math.abs(lWrist.y - lShoulder.y) < 0.12;
+    const levelR = Math.abs(rWrist.y - rShoulder.y) < 0.12;
+    const wide = Math.abs(lWrist.x - rWrist.x) > shoulderW * 2.1;
+    return levelL && levelR && wide;
+  }
+  if (id === 'squat_ya') {
+    // 深蹲開腿比YA：雙手舉高 + 雙腳開腿 + 臀部下壓接近膝蓋
+    const handsHigh = lWrist.y < nose.y && rWrist.y < nose.y;
+    const legsOpen = Math.abs(lAnkle.x - rAnkle.x) > shoulderW * 1.15;
+    const hipY = (lHip.y + rHip.y) / 2;
+    const kneeY = (lKnee.y + rKnee.y) / 2;
+    const squatLow = (kneeY - hipY) < shoulderW * 0.95;
+    return handsHigh && legsOpen && squatLow;
+  }
+  return false;
+}
+
+// 訓練模式計次判定（狀態機：站直/撐起 'up' -> 下蹲/下壓 'down' -> 回到 'up' 算 1 下）
+function evaluateTrainRep(id, lm) {
+  let counted = false;
+  let inDownPhase = false;
+
+  if (id === 'squat_rep') {
+    // 取較清晰的一側（側面或正面皆可）計算髖-膝-踝夾角
+    const useLeft = (lm[25].visibility || 0) >= (lm[26].visibility || 0);
+    const hip = useLeft ? lm[23] : lm[24];
+    const knee = useLeft ? lm[25] : lm[26];
+    const ankle = useLeft ? lm[27] : lm[28];
+    const kneeAngle = calcAngle(hip, knee, ankle);
+
+    if (kneeAngle < 115) {
+      trainPhase = 'down';
+      inDownPhase = true;
+    } else if (kneeAngle > 155 && trainPhase === 'down') {
+      trainPhase = 'up';
+      counted = true;
     } else {
-      poseState.phase = 'punish_prep';
-      let prepLeft = 3.0;
-      poseState.punishSecLeft = 15.0;
-      poseState.punishBreakSec = 0;
+      inDownPhase = (trainPhase === 'down');
+    }
+  } else if (id === 'pushup') {
+    // 側面扶立挺身：取較清晰的一側計算肩-肘-腕夾角
+    const useLeft = (lm[13].visibility || 0) >= (lm[14].visibility || 0);
+    const shoulder = useLeft ? lm[11] : lm[12];
+    const elbow = useLeft ? lm[13] : lm[14];
+    const wrist = useLeft ? lm[15] : lm[16];
+    const elbowAngle = calcAngle(shoulder, elbow, wrist);
 
-      poseLoopTimer = setInterval(() => {
-        if (currentAppMode !== 'pose') { stopPoseSession(); return; }
-        if (checkCrossBrakeTick()) return;
-
-        if (poseState.phase === 'punish_prep') {
-          prepLeft -= 0.2;
-          document.getElementById('ui-mode').innerText = '懲罰倒數準備';
-          if (!poseState.isCrossArmedNow) {
-            subText.innerText = `⏳ 快擺好姿勢！${Math.max(0, prepLeft).toFixed(1)} 秒後開始監視！`;
-          }
-          progBar.style.background = '#f59e0b';
-          progBar.style.width = `${(prepLeft / 3) * 100}%`;
-          if (prepLeft <= 0) {
-            poseState.phase = 'punishing';
-          }
-        } else if (poseState.phase === 'punishing') {
-          poseState.punishSecLeft -= 0.2;
-          progBar.style.width = `${Math.max(0, (poseState.punishSecLeft / 15) * 100)}%`;
-
-          if (poseState.isMatchedNow) {
-            hud.classList.add('matched');
-            hud.classList.remove('punishing');
-            sendMotorSpeed(0);
-            document.getElementById('ui-mode').innerText = '姿勢合格(暫停)';
-            if (!poseState.isCrossArmedNow) {
-              subText.innerText = `✅ 撐住！剩餘 ${Math.max(0, poseState.punishSecLeft).toFixed(1)} 秒（一走樣就開抽）`;
-            }
-            progBar.style.background = '#10b981';
-          } else {
-            poseState.punishBreakSec += 0.2;
-            hud.classList.remove('matched');
-            hud.classList.add('punishing');
-            sendMotorSpeed(poseState.punishIntensity);
-            document.getElementById('ui-mode').innerText = '姿勢走樣懲罰中';
-            if (!poseState.isCrossArmedNow) {
-              subText.innerText = `⚡ 姿勢跑掉了！懲罰抽插中（剩 ${Math.max(0, poseState.punishSecLeft).toFixed(1)} 秒）`;
-            }
-            progBar.style.background = '#e11d48';
-          }
-
-          if (poseState.punishSecLeft <= 0) {
-            clearInterval(poseLoopTimer);
-            sendMotorSpeed(0);
-            poseState.phase = 'idle';
-            const brokeTime = poseState.punishBreakSec.toFixed(1);
-            requestNextPoseTask(`[系統自動回報：15 秒「${poseObj.name}」考驗結束，使用者中途姿勢走樣累計 ${brokeTime} 秒並被懲罰抽插。請嘲諷或評價他的表現，並立刻下達下一個姿勢指令！]`);
-          }
-        }
-      }, 200);
+    if (elbowAngle < 105) {
+      trainPhase = 'down';
+      inDownPhase = true;
+    } else if (elbowAngle > 150 && trainPhase === 'down') {
+      trainPhase = 'up';
+      counted = true;
+    } else {
+      inDownPhase = (trainPhase === 'down');
     }
   }
 
-  function triggerPoseEdgeBrake() {
-    stopPoseSession();
-    sendMotorSpeed(0);
-    document.getElementById('ui-mode').innerText = '緊急寸止煞車';
-    document.getElementById('pose-hud').classList.add('surrendered');
-    document.getElementById('pose-target-name').innerText = '🥵 緊急寸止冷卻中';
-    document.getElementById('pose-sub-text').innerText = '已收到求饒訊號，馬達已歸零！女王正在嘲笑你...';
-
-    requestNextPoseTask('[系統緊急通報：使用者在姿勢考驗中被抽插到受不了，比出了投降叉叉／按下了「快射了」緊急煞車！請狠狠嘲諷他這麼快就差點失守，讓他冷卻幾秒後繼續下達下一個姿勢考驗！]');
-  }
+  return { counted, inDownPhase };
+}
 </script>
 </body>
 </html>
